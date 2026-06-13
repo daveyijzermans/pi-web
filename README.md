@@ -1,9 +1,12 @@
 # pi-web (Remote Control Your Pi)
 
-Drive your [pi](https://pi.dev) coding agent from any browser on your network — laptop, phone, or tablet.
+Drive your [pi](https://pi.dev) coding agent from your phone, tablet, or laptop — anywhere on your network, or remotely over Tailscale.
 
 > [!WARNING]
 > pi-web is currently in **beta**. Things will change and break!
+
+> [!TIP]
+> New here? **[Read the user guide →](user-docs/README.md)** for a full tour of features, install steps, and tips.
 
 ## Screenshots
 
