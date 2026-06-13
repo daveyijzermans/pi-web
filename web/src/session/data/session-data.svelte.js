@@ -182,10 +182,18 @@ export class SessionDataModel {
       this.currentLeafId && nodeMap.has(this.currentLeafId)
         ? findNewestLeaf(this.currentLeafId, nodeMap)
         : '';
-    if (!nextLeafId) {
+    // The session-header line ({type:'session'}) has its own id but is metadata,
+    // not a conversation entry. When a brand-new session is first opened it is the
+    // only entry, so hydration parks currentLeafId on it; after the user sends a
+    // message the real chain (model_change → … → assistant) lives on a separate
+    // root with parentId:null, so findNewestLeaf has no children to walk and returns
+    // the session id, leaving activePath rendering nothing. Fall back to the last
+    // real entry in that case.
+    if (!nextLeafId || this.byId.get(nextLeafId)?.type === 'session') {
       for (let i = this.entries.length - 1; i >= 0; i -= 1) {
-        if (this.entries[i]?.id && this.entries[i]?.type !== 'label') {
-          nextLeafId = this.entries[i].id;
+        const entry = this.entries[i];
+        if (entry?.id && entry.type !== 'label' && entry.type !== 'session') {
+          nextLeafId = entry.id;
           break;
         }
       }

@@ -15,6 +15,12 @@ describe('session-page-data', () => {
     expect(newestLeaf([{}, null])).toBe('');
   });
 
+  it('skips the session-header line so a brand-new session does not pick metadata as the leaf', () => {
+    expect(newestLeaf([{ type: 'session', id: 'sess-1' }])).toBe('');
+    expect(newestLeaf([{ type: 'session', id: 'sess-1' }, { id: 'a' }])).toBe('a');
+    expect(newestLeaf([{ id: 'a' }, { type: 'label', id: 'l1' }])).toBe('a');
+  });
+
   it('renders an escaped first-message stub', () => {
     const html = firstMessageStub([
       { type: 'message', message: { role: 'user', content: '<hello> & bye' } },

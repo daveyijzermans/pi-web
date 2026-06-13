@@ -130,6 +130,47 @@ describe('SessionDataModel', () => {
     expect(m.currentLeafId).toBe('old');
   });
 
+  it('reconcile() advances off the session-header leaf when real entries arrive', () => {
+    // A brand-new session's JSONL contains only the {type:'session'} header
+    // line, so hydration parks currentLeafId on that id. When the user sends
+    // the first message the real chain has its own parentId:null root, so the
+    // session header has no children to walk to. Reconcile must still pick the
+    // newest real entry as the active leaf or the content pane stays empty.
+    const m = new SessionDataModel({
+      entries: [{ type: 'session', id: 'sess-1', timestamp: '2026-01-01T00:00:00Z' }],
+      header: { id: 'sess-1' },
+      leafId: 'sess-1',
+    });
+    expect(m.currentLeafId).toBe('sess-1');
+    m.reconcile([
+      { type: 'session', id: 'sess-1', timestamp: '2026-01-01T00:00:00Z' },
+      {
+        type: 'model_change',
+        id: 'mc',
+        parentId: null,
+        timestamp: '2026-01-01T00:00:01Z',
+        provider: 'p',
+        modelId: 'm',
+      },
+      {
+        type: 'message',
+        id: 'u1',
+        parentId: 'mc',
+        timestamp: '2026-01-01T00:00:02Z',
+        message: { role: 'user', content: 'hello' },
+      },
+      {
+        type: 'message',
+        id: 'a1',
+        parentId: 'u1',
+        timestamp: '2026-01-01T00:00:03Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
+      },
+    ]);
+    expect(m.currentLeafId).toBe('a1');
+    expect(m.activePath.map((e) => e.id)).toEqual(['mc', 'u1', 'a1']);
+  });
+
   it('derives the ordered active path (root→leaf)', () => {
     const m = model();
     expect(m.activePath.map((e) => e.id)).toEqual(['root', 'mid', 'leaf']);

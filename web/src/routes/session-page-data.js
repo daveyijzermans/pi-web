@@ -29,7 +29,8 @@ export function encodePayload(
 
 export function newestLeaf(entries = []) {
   for (let i = entries.length - 1; i >= 0; i -= 1) {
-    if (entries[i]?.id) return entries[i].id;
+    const entry = entries[i];
+    if (entry?.id && entry.type !== 'session' && entry.type !== 'label') return entry.id;
   }
   return '';
 }
