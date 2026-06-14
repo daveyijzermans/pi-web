@@ -4,33 +4,39 @@
   import { t } from '../../shared/i18n.js';
   import {
     collapsedProjectsStorageKey,
-    filterSessions,
+    groupSessionsByDate,
     groupSessionsByProject,
-    groupSessionsTimeline,
     sessionsCountLabel,
   } from '../../index/sessions.js';
   import SessionCard from './SessionCard.svelte';
 
+  const dateBucketLabels = {
+    today: 'index.dateToday',
+    yesterday: 'index.dateYesterday',
+    previous7days: 'index.datePrevious7Days',
+    previous30days: 'index.datePrevious30Days',
+    older: 'index.dateOlder',
+  };
+
   let {
     sessions = [],
     layout = 'timeline',
-    query = '',
     runningSessionIds = new Set(),
     runningStatuses = new Map(),
     loading = false,
     layoutReady = false,
+    hasMore = false,
+    loadingMore = false,
+    onLoadMore = () => {},
   } = $props();
 
   let now = $state(Date.now());
   let collapsed = $state({});
 
-  const visibleSessions = $derived(filterSessions(sessions, query));
-  const groups = $derived(
-    layout === 'projects'
-      ? groupSessionsByProject(visibleSessions)
-      : groupSessionsTimeline(visibleSessions),
-  );
   const isTimeline = $derived(layout === 'timeline');
+  const groups = $derived(
+    isTimeline ? groupSessionsByDate(sessions, now) : groupSessionsByProject(sessions),
+  );
 
   function readCollapsed() {
     try {
@@ -90,53 +96,76 @@
       <h3>{t('index.noSessionsYet')}</h3>
       <p>{t('index.noSessionsYetHint')}</p>
     </div>
-  {:else if visibleSessions.length === 0}
-    <div class="empty-state">
-      <h3>{t('index.noSessions')}</h3>
-      <p>{t('index.noSessionsHint')}</p>
-    </div>
   {:else}
-    {#each groups as group (group.project + ':' + group.sessions[0]?.id)}
-      {@const runningCount = runningCountFor(group)}
-      {@const isCollapsed = !!collapsed[group.project]}
-      <div
-        class="project-group"
-        class:timeline-group={isTimeline}
-        class:collapsed={isCollapsed}
-        data-project={group.project}
-      >
-        <button
-          class="project-toggle"
-          type="button"
-          aria-expanded={String(!isCollapsed)}
-          onclick={() => toggleProject(group.project)}
-        >
-          <span class="project-chevron" aria-hidden="true"
-            >{@html icon(ChevronDown, { size: 12 })}</span
-          >
-          <span class="project-name">{group.project}</span>
-          <span
-            class="project-count"
-            data-project-count
-            data-running={runningCount}
-            data-total={group.sessions.length}
-          >
-            {runningCount > 0
-              ? t('index.activeCount', { count: runningCount })
-              : sessionsCountLabel(group.sessions.length)}
-          </span>
-        </button>
-        <div class="session-grid" class:session-grid--timeline={isTimeline}>
-          {#each group.sessions as session (session.id)}
-            <SessionCard
-              {session}
-              running={runningSessionIds.has(session.id)}
-              runningStatus={runningStatuses.get(session.id)}
-              {now}
-            />
-          {/each}
+    {#if isTimeline}
+      {#each groups as group (group.bucket)}
+        {@const runningCount = runningCountFor(group)}
+        <div class="timeline-section" data-bucket={group.bucket}>
+          <div class="date-separator">
+            <span class="date-separator-label">{t(dateBucketLabels[group.bucket])}</span>
+            <span class="date-separator-count" data-running={runningCount}>
+              {runningCount > 0
+                ? t('index.activeCount', { count: runningCount })
+                : sessionsCountLabel(group.sessions.length)}
+            </span>
+          </div>
+          <div class="session-grid">
+            {#each group.sessions as session (session.id)}
+              <SessionCard
+                {session}
+                running={runningSessionIds.has(session.id)}
+                runningStatus={runningStatuses.get(session.id)}
+                {now}
+              />
+            {/each}
+          </div>
         </div>
+      {/each}
+    {:else}
+      {#each groups as group (group.project + ':' + group.sessions[0]?.id)}
+        {@const runningCount = runningCountFor(group)}
+        {@const isCollapsed = !!collapsed[group.project]}
+        <div class="project-group" class:collapsed={isCollapsed} data-project={group.project}>
+          <button
+            class="project-toggle"
+            type="button"
+            aria-expanded={String(!isCollapsed)}
+            onclick={() => toggleProject(group.project)}
+          >
+            <span class="project-chevron" aria-hidden="true"
+              >{@html icon(ChevronDown, { size: 12 })}</span
+            >
+            <span class="project-name">{group.project}</span>
+            <span
+              class="project-count"
+              data-project-count
+              data-running={runningCount}
+              data-total={group.sessions.length}
+            >
+              {runningCount > 0
+                ? t('index.activeCount', { count: runningCount })
+                : sessionsCountLabel(group.sessions.length)}
+            </span>
+          </button>
+          <div class="session-grid">
+            {#each group.sessions as session (session.id)}
+              <SessionCard
+                {session}
+                running={runningSessionIds.has(session.id)}
+                runningStatus={runningStatuses.get(session.id)}
+                {now}
+              />
+            {/each}
+          </div>
+        </div>
+      {/each}
+    {/if}
+    {#if hasMore}
+      <div class="load-more">
+        <button class="load-more-btn" type="button" onclick={onLoadMore} disabled={loadingMore}>
+          {loadingMore ? t('index.loadingMore') : t('index.loadMore')}
+        </button>
       </div>
-    {/each}
+    {/if}
   {/if}
 </div>

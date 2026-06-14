@@ -28,10 +28,13 @@
     normalizeSession,
   } from '../index/sessions.js';
 
+  const PAGE_SIZE = 100;
+
   let sessions = $state([]);
+  let total = $state(0);
+  let loadingMore = $state(false);
   let loading = $state(true);
   let layoutReady = $state(false);
-  let query = $state('');
   let layout = $state('timeline');
   const runningSessionIds = new SvelteSet();
   const runningStatuses = new SvelteMap();
@@ -49,10 +52,9 @@
   let refreshInflight = false;
 
   const totalSessionsLabel = $derived(
-    sessions.length === 1
-      ? t('index.sessionCountOne')
-      : t('index.sessionsCount', { count: sessions.length }),
+    total === 1 ? t('index.sessionCountOne') : t('index.sessionsCount', { count: total }),
   );
+  const hasMore = $derived(sessions.length < total);
   const runningCount = $derived(runningSessionIds.size);
 
   function setRunningSessions(snapshot) {
@@ -74,12 +76,14 @@
     }
   }
 
-  async function refreshSessions() {
+  async function refreshSessions({ preserveWindow = false } = {}) {
     if (refreshInflight || newSessionOpen) return;
     refreshInflight = true;
     try {
-      const response = await defaultFetchSessions();
+      const limit = preserveWindow ? Math.max(PAGE_SIZE, sessions.length) : PAGE_SIZE;
+      const response = await defaultFetchSessions({ limit });
       sessions = (response.sessions || []).map(normalizeSession);
+      total = response.total ?? sessions.length;
       await tick();
       refreshSessionPalette();
     } catch {
@@ -91,21 +95,36 @@
     }
   }
 
+  async function loadMore() {
+    if (loadingMore || refreshInflight) return;
+    loadingMore = true;
+    try {
+      const response = await defaultFetchSessions({ limit: PAGE_SIZE, offset: sessions.length });
+      const more = (response.sessions || []).map(normalizeSession);
+      const seen = new Set(sessions.map((session) => session.id));
+      sessions = [...sessions, ...more.filter((session) => !seen.has(session.id))];
+      total = response.total ?? total;
+    } catch {
+      // Leave the loaded list untouched if a page fails to load.
+    } finally {
+      loadingMore = false;
+    }
+  }
+
   const RELOAD_DEBOUNCE_MS = 500;
   let reloadTimer = null;
   function scheduleReload() {
     if (reloadTimer) clearTimeout(reloadTimer);
-    if (newSessionOpen || query.trim()) return;
+    if (newSessionOpen) return;
     reloadTimer = setTimeout(() => {
       reloadTimer = null;
-      refreshSessions();
+      refreshSessions({ preserveWindow: true });
     }, RELOAD_DEBOUNCE_MS);
   }
 
-  async function setLayout(nextLayout) {
+  function setLayout(nextLayout) {
     layout = nextLayout === 'projects' ? 'projects' : 'timeline';
     writeSetting(layoutStorageKey, layout, { storage: localStorage });
-    await refreshSessions();
   }
 
   async function openNewSessionModal() {
@@ -225,7 +244,7 @@
       onSnapshot: (snapshot) => setRunningSessions(snapshot),
       onDelta: (status) => setSessionRunning(status.id, status.running, status),
       onMessage: (message) => {
-        if (message === 'new-session') refreshSessions();
+        if (message === 'new-session') refreshSessions({ preserveWindow: true });
         if (message === 'reload') scheduleReload();
       },
     });
@@ -296,22 +315,18 @@
   onclick={openNewSessionModal}>+</button
 >
 
-<CommandPalette
-  onQueryChange={(q) => {
-    query = q;
-  }}
-  onNewSession={openNewSessionModal}
-  navigate={(url) => navigate(url)}
-/>
+<CommandPalette onNewSession={openNewSessionModal} navigate={(url) => navigate(url)} />
 
 <SessionsList
   {sessions}
   {layout}
-  {query}
   {runningSessionIds}
   {runningStatuses}
   {loading}
   {layoutReady}
+  {hasMore}
+  {loadingMore}
+  onLoadMore={loadMore}
 />
 
 <NewSessionModal

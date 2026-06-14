@@ -11,8 +11,10 @@ test.describe("sessions index", () => {
     await expect(notes).toBeVisible();
   });
 
-  test("groups cards by sanitized project path", async ({ page }) => {
+  test("groups cards by sanitized project path in Projects layout", async ({ page }) => {
     await page.goto("/");
+
+    await page.locator('[data-layout-btn="projects"]').click();
 
     await expect(
       page.locator('.project-group[data-project="/home/user/demo-project"]'),

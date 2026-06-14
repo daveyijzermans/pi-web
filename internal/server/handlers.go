@@ -162,7 +162,8 @@ func (s *Server) handleApiSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	project := r.URL.Query().Get("project")
+	q := r.URL.Query()
+	project := q.Get("project")
 	if project != "" {
 		filtered := make([]sessions.SessionSummary, 0, len(summaries))
 		for _, sum := range summaries {
@@ -175,9 +176,58 @@ func (s *Server) handleApiSessions(w http.ResponseWriter, r *http.Request) {
 		summaries = s.filterEnabledSummaries(summaries)
 	}
 	summaries = s.filterBtwSummaries(summaries)
+
+	if query := strings.TrimSpace(q.Get("q")); query != "" {
+		summaries = filterSummariesByQuery(summaries, query)
+	}
+
 	sessions.SortSummariesByActivity(summaries)
 
-	writeJSON(w, 0, map[string]any{"sessions": summaries})
+	total := len(summaries)
+	summaries = paginateSummaries(summaries, q.Get("offset"), q.Get("limit"))
+
+	writeJSON(w, 0, map[string]any{"sessions": summaries, "total": total})
+}
+
+// filterSummariesByQuery keeps summaries whose name, project, model, or UUID
+// contains query (case-insensitive). Mirrors the frontend sessionSearchText so
+// the command palette and the browse feed match on the same fields.
+func filterSummariesByQuery(summaries []sessions.SessionSummary, query string) []sessions.SessionSummary {
+	q := strings.ToLower(query)
+	out := make([]sessions.SessionSummary, 0, len(summaries))
+	for _, sum := range summaries {
+		model := sum.Model
+		if sum.ModelProvider != "" && sum.Model != "" {
+			model = sum.ModelProvider + "/" + sum.Model
+		}
+		haystack := strings.ToLower(strings.Join([]string{sum.Name, sum.Project, model, sum.SessionUUID}, " "))
+		if strings.Contains(haystack, q) {
+			out = append(out, sum)
+		}
+	}
+	return out
+}
+
+// paginateSummaries returns summaries[offset:offset+limit] when limit parses as
+// a positive int. A missing or invalid limit returns the full slice so existing
+// callers (and the export) keep receiving every session.
+func paginateSummaries(summaries []sessions.SessionSummary, offsetStr, limitStr string) []sessions.SessionSummary {
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		return summaries
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+	if offset >= len(summaries) {
+		return []sessions.SessionSummary{}
+	}
+	end := offset + limit
+	if end > len(summaries) {
+		end = len(summaries)
+	}
+	return summaries[offset:end]
 }
 
 func (s *Server) handleApiSession(w http.ResponseWriter, r *http.Request) {

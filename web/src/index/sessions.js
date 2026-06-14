@@ -89,31 +89,45 @@ export function groupSessionsByProject(sessions = []) {
   return groups;
 }
 
-export function groupSessionsTimeline(sessions = []) {
+export const dateBucketOrder = ['today', 'yesterday', 'previous7days', 'previous30days', 'older'];
+
+export function dateBucketFor(ms, now = Date.now()) {
+  if (!Number.isFinite(ms)) return 'older';
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const day = 86400000;
+  const today = startOfToday.getTime();
+  if (ms >= today) return 'today';
+  if (ms >= today - day) return 'yesterday';
+  if (ms >= today - 7 * day) return 'previous7days';
+  if (ms >= today - 30 * day) return 'previous30days';
+  return 'older';
+}
+
+export function groupSessionsByDate(sessions = [], now = Date.now()) {
   const sorted = [...sessions].sort((a, b) => activityMs(b) - activityMs(a));
-  const groups = [];
-  let current = null;
+  const byBucket = new Map();
   for (const session of sorted) {
-    const project = session.project || '';
-    if (!current || current.project !== project) {
-      current = { project, sessions: [] };
-      groups.push(current);
+    const bucket = dateBucketFor(activityMs(session), now);
+    let group = byBucket.get(bucket);
+    if (!group) {
+      group = { bucket, sessions: [] };
+      byBucket.set(bucket, group);
     }
-    current.sessions.push(session);
+    group.sessions.push(session);
   }
-  return groups;
+  return dateBucketOrder
+    .filter((bucket) => byBucket.has(bucket))
+    .map((bucket) => byBucket.get(bucket));
 }
 
-export function filterSessions(sessions = [], query = '') {
-  const q = String(query || '')
-    .trim()
-    .toLowerCase();
-  if (!q) return sessions;
-  return sessions.filter((session) => sessionSearchText(session).toLowerCase().includes(q));
-}
-
-export function defaultFetchSessions() {
-  return getJSON('/api/sessions');
+export function defaultFetchSessions({ limit, offset, query } = {}) {
+  const params = new URLSearchParams();
+  if (Number.isFinite(limit) && limit > 0) params.set('limit', String(limit));
+  if (Number.isFinite(offset) && offset > 0) params.set('offset', String(offset));
+  if (query) params.set('q', query);
+  const qs = params.toString();
+  return getJSON('/api/sessions' + (qs ? '?' + qs : ''));
 }
 export function defaultFetchRecent() {
   return getJSON('/api/recent-locations');

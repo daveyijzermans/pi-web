@@ -78,9 +78,15 @@
   export async function fetchPaletteSessions({
     fetchImpl = fetch,
     getCwd = () => defaultSessionPaletteCwd(),
+    query = '',
+    limit = 50,
   } = {}) {
     const cwd = getCwd ? getCwd() : '';
-    const url = cwd ? '/api/sessions?project=' + encodeURIComponent(cwd) : '/api/sessions';
+    const params = [];
+    if (cwd) params.push('project=' + encodeURIComponent(cwd));
+    if (query) params.push('q=' + encodeURIComponent(query));
+    if (Number.isFinite(limit) && limit > 0) params.push('limit=' + limit);
+    const url = '/api/sessions' + (params.length ? '?' + params.join('&') : '');
     const response = await fetchImpl(url);
     const data = await response.json();
     return (data.sessions || []).sort((a, b) => {
@@ -163,7 +169,8 @@
     error = '';
     try {
       const loader =
-        loadSessions || (() => fetchPaletteSessions({ fetchImpl: effectiveFetch, getCwd }));
+        loadSessions ||
+        (() => fetchPaletteSessions({ fetchImpl: effectiveFetch, getCwd, query, limit: 50 }));
       const sessions = await loader({ query, documentImpl: document, windowImpl: window });
       if (generation !== loadGeneration) return;
       allSessions = (sessions || []).map(normalizePaletteSession);
@@ -189,9 +196,12 @@
     return reloadSessions();
   }
 
+  let searchTimer = null;
   function handleInput() {
     onQueryChange?.(query);
     selectedIndex = -1;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => reloadSessions(), 160);
   }
 
   function selectVisible(index) {
@@ -261,6 +271,7 @@
     const keydown = (e) => handleKeydown(e);
     window.addEventListener('keydown', keydown);
     return () => {
+      clearTimeout(searchTimer);
       window.removeEventListener('keydown', keydown);
       if (getSessionPaletteApi() === api) setSessionPaletteApi(previousApi);
       if (window.__piSessionPalette === api) delete window.__piSessionPalette;

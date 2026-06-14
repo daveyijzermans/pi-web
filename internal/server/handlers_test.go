@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -100,6 +101,73 @@ func TestHandleApiSessions_ProjectFilter(t *testing.T) {
 	filteredNoneSessions, _ := filteredNone["sessions"].([]any)
 	if len(filteredNoneSessions) != 0 {
 		t.Fatalf("expected 0 sessions for nonexistent project, got %d", len(filteredNoneSessions))
+	}
+}
+
+func newSessionsServer(t *testing.T) *Server {
+	t.Helper()
+	sessionsDir := filepath.Join(t.TempDir(), "sessions")
+	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	return &Server{sessionsDir: sessionsDir, cache: sessions.NewCache()}
+}
+
+func getSessions(t *testing.T, s *Server, url string) (count int, total int) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	w := httptest.NewRecorder()
+	s.handleApiSessions(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := body["sessions"].([]any)
+	totalF, _ := body["total"].(float64)
+	return len(list), int(totalF)
+}
+
+func TestHandleApiSessions_Pagination(t *testing.T) {
+	s := newSessionsServer(t)
+	for i := 0; i < 5; i++ {
+		writeSessionWithCWD(t, filepath.Join(s.sessionsDir, "sub"), "s"+strconv.Itoa(i)+".jsonl", "/home/user/project")
+	}
+
+	if count, total := getSessions(t, s, "/api/sessions"); count != 5 || total != 5 {
+		t.Fatalf("no limit: count=%d total=%d, want 5/5", count, total)
+	}
+	if count, total := getSessions(t, s, "/api/sessions?limit=2"); count != 2 || total != 5 {
+		t.Fatalf("limit=2: count=%d total=%d, want 2/5", count, total)
+	}
+	if count, total := getSessions(t, s, "/api/sessions?limit=2&offset=4"); count != 1 || total != 5 {
+		t.Fatalf("offset=4: count=%d total=%d, want 1/5", count, total)
+	}
+	if count, total := getSessions(t, s, "/api/sessions?limit=2&offset=99"); count != 0 || total != 5 {
+		t.Fatalf("offset past end: count=%d total=%d, want 0/5", count, total)
+	}
+}
+
+func TestHandleApiSessions_Search(t *testing.T) {
+	s := newSessionsServer(t)
+	writeSessionWithCWD(t, filepath.Join(s.sessionsDir, "a"), "alpha-1.jsonl", "/home/user/project-alpha")
+	writeSessionWithCWD(t, filepath.Join(s.sessionsDir, "b"), "beta-1.jsonl", "/home/user/project-beta")
+	writeSessionWithCWD(t, filepath.Join(s.sessionsDir, "a"), "alpha-2.jsonl", "/home/user/project-alpha")
+
+	if count, total := getSessions(t, s, "/api/sessions?q=beta"); count != 1 || total != 1 {
+		t.Fatalf("q=beta: count=%d total=%d, want 1/1", count, total)
+	}
+	if count, total := getSessions(t, s, "/api/sessions?q=alpha"); count != 2 || total != 2 {
+		t.Fatalf("q=alpha: count=%d total=%d, want 2/2", count, total)
+	}
+	if count, total := getSessions(t, s, "/api/sessions?q=nomatch"); count != 0 || total != 0 {
+		t.Fatalf("q=nomatch: count=%d total=%d, want 0/0", count, total)
+	}
+	// Search combines with pagination total.
+	if count, total := getSessions(t, s, "/api/sessions?q=alpha&limit=1"); count != 1 || total != 2 {
+		t.Fatalf("q=alpha limit=1: count=%d total=%d, want 1/2", count, total)
 	}
 }
 
