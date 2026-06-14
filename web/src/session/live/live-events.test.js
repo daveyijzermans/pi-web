@@ -88,6 +88,65 @@ describe('live events', () => {
     expect(scrollAfterLayout).toHaveBeenCalledWith(true);
   });
 
+  it('scrolls instead of showing the button when at the bottom but follow flag is stale', async () => {
+    // Regression: agent finishes while the viewport is pinned to the bottom, but
+    // `following` was knocked false by a relayout clamp. The reload must use the
+    // live scroll position and not pop the "scroll to bottom" button.
+    const entries = [{ id: 'a' }, { id: 'b' }];
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ entries }), { status: 200 })),
+    );
+    const entryState = { seen: new Set(['a']), liveRendered: new Set() };
+    const scrollAfterLayout = vi.fn();
+    const incrementPending = vi.fn();
+    const showFollowButton = vi.fn();
+
+    await handleSessionReload({
+      sessionId: 's',
+      fetchImpl,
+      entryState,
+      clearChatPreview: vi.fn(),
+      isFollowing: () => false,
+      isAtBottom: () => true,
+      scrollAfterLayout,
+      incrementPending,
+      showFollowButton,
+      onReloaded: vi.fn(),
+    });
+
+    expect(scrollAfterLayout).toHaveBeenCalledWith(true);
+    expect(showFollowButton).not.toHaveBeenCalled();
+    expect(incrementPending).not.toHaveBeenCalled();
+  });
+
+  it('shows the button when not following and not at the bottom', async () => {
+    const entries = [{ id: 'a' }, { id: 'b' }];
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ entries }), { status: 200 })),
+    );
+    const entryState = { seen: new Set(['a']), liveRendered: new Set() };
+    const scrollAfterLayout = vi.fn();
+    const incrementPending = vi.fn();
+    const showFollowButton = vi.fn();
+
+    await handleSessionReload({
+      sessionId: 's',
+      fetchImpl,
+      entryState,
+      clearChatPreview: vi.fn(),
+      isFollowing: () => false,
+      isAtBottom: () => false,
+      scrollAfterLayout,
+      incrementPending,
+      showFollowButton,
+      onReloaded: vi.fn(),
+    });
+
+    expect(showFollowButton).toHaveBeenCalledTimes(1);
+    expect(incrementPending).toHaveBeenCalledWith(1);
+    expect(scrollAfterLayout).not.toHaveBeenCalled();
+  });
+
   it('wires event source messages', () => {
     const eventSource = { addEventListener: vi.fn() };
     const onReload = vi.fn();

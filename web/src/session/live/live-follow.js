@@ -84,10 +84,15 @@ export function createFollowScrollController({
     const currentScroll = getScrollPosition();
     const scrolledUp = currentScroll < lastScrollTop;
     lastScrollTop = currentScroll;
-    following = isAtBottom(scrollImpls);
-    if (scrolledUp) {
-      // User manually scrolled up; release the forced follow so they can read
-      // previous messages without being yanked back down.
+    const atBottom = isAtBottom(scrollImpls);
+    following = atBottom;
+    if (scrolledUp && !atBottom) {
+      // User manually scrolled up and away from the bottom; release the forced
+      // follow so they can read previous messages without being yanked back
+      // down. A downward scrollTop clamp (the browser shrinking the document
+      // when a streaming preview is finalized/removed) also decreases scrollTop
+      // but leaves us pinned at the bottom — that must not release follow, or
+      // the "scroll to bottom" button wrongly appears when the agent finishes.
       forcePreviewFollowUntil = 0;
       following = false;
     }
@@ -124,6 +129,7 @@ export function createFollowScrollController({
 
   return {
     isFollowing: () => following,
+    isAtBottom: () => isAtBottom(scrollImpls),
     shouldFollow: () => following || Date.now() < forcePreviewFollowUntil,
     extendPreviewFollow: (ms = 30000) => {
       forcePreviewFollowUntil = Date.now() + ms;

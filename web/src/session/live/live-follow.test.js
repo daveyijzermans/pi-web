@@ -68,6 +68,31 @@ describe('createFollowScrollController', () => {
     expect(documentImpl.querySelector('.follow-button')).not.toBeNull();
   });
 
+  it('keeps following on a downward scrollTop clamp that stays at the bottom', () => {
+    const { documentImpl, windowImpl, fire, controller } = setup();
+    windowImpl.scrollY = 1000; // remaining = 2000 - 1000 - 1000 = 0 (at bottom)
+    fire('scroll');
+    expect(controller.isFollowing()).toBe(true);
+    // The document shrinks when the streaming preview is finalized/removed, so
+    // the browser clamps scrollTop downward — but we are still at the bottom.
+    windowImpl.scrollY = 960; // remaining = 40 (< 80 threshold, still at bottom)
+    fire('scroll');
+    expect(controller.isFollowing()).toBe(true);
+    expect(documentImpl.querySelector('.follow-button')).toBeNull();
+  });
+
+  it('releases forced follow when the user scrolls up away from the bottom', () => {
+    const { windowImpl, fire, controller } = setup();
+    windowImpl.scrollY = 1000;
+    fire('scroll');
+    controller.extendPreviewFollow(30000);
+    expect(controller.shouldFollow()).toBe(true);
+    windowImpl.scrollY = 0; // remaining = 1000 (away from bottom) and scrolled up
+    fire('scroll');
+    expect(controller.isFollowing()).toBe(false);
+    expect(controller.shouldFollow()).toBe(false);
+  });
+
   it('clicking the follow button re-follows and removes the button', () => {
     const { documentImpl, windowImpl, fire, controller } = setup();
     fire('scroll');

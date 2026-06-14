@@ -17,6 +17,7 @@ export async function handleSessionReload({
   updateStats = () => {},
   updateTitle = () => {},
   isFollowing = () => false,
+  isAtBottom = () => false,
   scrollAfterLayout = () => {},
   incrementPending = () => {},
   showFollowButton = () => {},
@@ -74,7 +75,10 @@ export async function handleSessionReload({
 
   if (newCount > 0) {
     updateStats(entries);
-    if (isFollowing()) {
+    // Decide on the live scroll position, not just the cached follow flag: the
+    // viewport can be pinned to the bottom while `following` is momentarily
+    // stale, in which case showing the button would be wrong.
+    if (isFollowing() || isAtBottom()) {
       scrollAfterLayout(true);
     } else {
       incrementPending(newCount);
