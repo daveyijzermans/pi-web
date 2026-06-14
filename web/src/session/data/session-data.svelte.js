@@ -32,6 +32,7 @@ import {
   buildActivePathIds,
   findNewestLeaf,
   getPath,
+  stitchOrphanRoots,
 } from '../tree/session-tree.js';
 import { filterNodes } from '../tree/session-filter.js';
 
@@ -124,7 +125,7 @@ export class SessionDataModel {
   }
 
   #hydrate(data, { preserveView = false } = {}) {
-    this.entries = Array.isArray(data.entries) ? data.entries : [];
+    this.entries = stitchOrphanRoots(Array.isArray(data.entries) ? data.entries : []);
     this.header = data.header ?? null;
     this.systemPrompt = data.systemPrompt ?? null;
     this.tools = data.tools ?? null;
@@ -171,7 +172,7 @@ export class SessionDataModel {
   // it was unset.
   reconcile(entries) {
     if (!Array.isArray(entries)) return;
-    this.entries.splice(0, this.entries.length, ...entries);
+    this.entries.splice(0, this.entries.length, ...stitchOrphanRoots(entries));
     const lk = buildSessionLookups(this.entries);
     refillMap(this.byId, lk.byId);
     refillMap(this.toolCallMap, lk.toolCallMap);

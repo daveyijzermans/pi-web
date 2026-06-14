@@ -7,6 +7,7 @@ import {
   findNewestLeaf,
   flattenTree,
   getPath,
+  stitchOrphanRoots,
 } from './session-tree.js';
 
 const entries = [
@@ -119,5 +120,44 @@ describe('session tree helpers', () => {
     const flat = flattenTree(roots, buildActivePathIds('leaf', byId()));
     expect(flat.map((f) => f.node.entry.id)).toEqual(['root', 'new', 'leaf', 'old', 'orphan']);
     expect(buildTreePrefix(flat[1])).toContain('├');
+  });
+
+  describe('stitchOrphanRoots', () => {
+    it('links a resumed/forked second segment onto the prior segment leaf', () => {
+      const forked = [
+        { type: 'session', id: 'sess', timestamp: '2026-01-01T00:00:00Z' },
+        { type: 'model_change', id: 'mc-pre', parentId: null, timestamp: '2026-01-01T00:00:01Z' },
+        { type: 'message', id: 'u-pre', parentId: 'mc-pre', timestamp: '2026-01-01T00:00:02Z' },
+        { type: 'message', id: 'a-pre', parentId: 'u-pre', timestamp: '2026-01-01T00:00:03Z' },
+        { type: 'model_change', id: 'mc-post', parentId: null, timestamp: '2026-01-01T00:00:04Z' },
+        { type: 'message', id: 'u-post', parentId: 'mc-post', timestamp: '2026-01-01T00:00:05Z' },
+        { type: 'message', id: 'a-post', parentId: 'u-post', timestamp: '2026-01-01T00:00:06Z' },
+      ];
+      const stitched = stitchOrphanRoots(forked);
+      // The post-fork root is re-pointed onto the fork point (last pre-fork entry).
+      expect(stitched.find((e) => e.id === 'mc-post').parentId).toBe('a-pre');
+      // The pre-fork root and session header are untouched.
+      expect(stitched.find((e) => e.id === 'mc-pre').parentId).toBe(null);
+      expect(stitched.find((e) => e.id === 'sess').parentId).toBeUndefined();
+      // getPath from the newest leaf now spans both segments.
+      const map = new Map(stitched.map((e) => [e.id, e]));
+      expect(getPath('a-post', map).map((e) => e.id)).toEqual([
+        'mc-pre',
+        'u-pre',
+        'a-pre',
+        'mc-post',
+        'u-post',
+        'a-post',
+      ]);
+    });
+
+    it('returns the input unchanged for a single-segment session', () => {
+      const single = [
+        { type: 'session', id: 'sess', timestamp: '2026-01-01T00:00:00Z' },
+        { type: 'model_change', id: 'mc', parentId: null, timestamp: '2026-01-01T00:00:01Z' },
+        { type: 'message', id: 'u', parentId: 'mc', timestamp: '2026-01-01T00:00:02Z' },
+      ];
+      expect(stitchOrphanRoots(single)).toBe(single);
+    });
   });
 });

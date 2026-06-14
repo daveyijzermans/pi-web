@@ -38,6 +38,34 @@ export function buildTree(entries = [], labelMap = new Map()) {
   return roots;
 }
 
+// A forked session that pi later resumed (and any plain resume) is written as
+// several sequential conversation segments, each beginning with its own
+// parentId:null root. getPath/buildTree would treat those roots as disconnected,
+// so the content pane would render only the last segment while the earlier ones
+// linger in the tree as separate roots. Re-link every conversation root after the
+// first onto the previous segment's most recent entry so the whole conversation
+// forms one chain. The session-header line ({type:'session'}) is metadata, not a
+// conversation root, and is left untouched. Returns the input unchanged when there
+// is nothing to stitch (the common single-segment case).
+export function stitchOrphanRoots(entries = []) {
+  let result = entries;
+  let prevLeafId = null;
+  let seenRoot = false;
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i];
+    if (!entry?.id || entry.type === 'session' || entry.type === 'label') continue;
+    const isRoot =
+      entry.parentId === null || entry.parentId === undefined || entry.parentId === entry.id;
+    if (isRoot && seenRoot && prevLeafId) {
+      if (result === entries) result = entries.slice();
+      result[i] = { ...entry, parentId: prevLeafId };
+    }
+    if (isRoot) seenRoot = true;
+    prevLeafId = entry.id;
+  }
+  return result;
+}
+
 export function buildActivePathIds(targetId, byId = new Map()) {
   const ids = new Set();
   let current = byId.get(targetId);
