@@ -25,15 +25,17 @@ You're already deep in the flow with pi in your terminal. pi-web keeps that mome
 
 ---
 
-## pi-web as a desktop app 🏠
+## pi-web as your personal AI workspace 🏠
 
-pi-web is a PWA (Progressive Web App). That means you can **install it like a native app** on your desktop, laptop, phone, or tablet — no app store needed.
+pi-web is a PWA (Progressive Web App), so you can **install it like a native app** on your desktop, laptop, phone, or tablet — no app store needed. On desktop it opens in its own window with no browser chrome, so it looks and feels like a real desktop application.
 
-On desktop, it opens in its own window with no browser chrome. It looks and feels like a real desktop application. This is a game-changer for accessibility:
+Think of it as **your own Claude Cowork** — a personal AI workspace that lives on your machine — except it's open source and model-agnostic:
 
+- **You own the stack.** Pick any model, switch whenever you like. Run a local one and your data never leaves your machine.
 - **Non-technical people can use it.** Set up pi-web on their machine, show them how to use it once, and they're good to go. Your parents, your partner, your non-tech friends — no terminal, no SSH, just a familiar chat interface.
-- **It's like Claude Co-work, but open source.** You own the stack. You pick the model. If you run a local model, your data never leaves your machine.
-- **One setup, many users.** Install it on your desktop and share your screen. Or expose it on your home network and let family members open it on their own devices.
+- **One setup, many users.** Install it on your desktop and share your screen, or expose it on your home network and let family members open it on their own devices.
+
+Want more than coding? Turn it into a dedicated [personal assistant](personal-assistant.md) that knows who you are and lives on your machine — like your own OpenClaw or Hermes.
 
 > 💡 **Pro tip:** Install pi-web as a PWA from Chrome/Edge (click the install icon in the address bar) or Safari (Share → Add to Dock). It becomes indistinguishable from a native app.
 
