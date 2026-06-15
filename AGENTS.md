@@ -9,6 +9,17 @@
 
 Read the relevant doc in `@docs/` before structural changes, and update the matching doc whenever your change makes it out of date.
 
+### Localized docs
+
+The root `README.md` and everything under `user-docs/en/` are the English source of truth. Translations are machine-drafted, never hand-written:
+
+- Edit only the English source. Never edit `user-docs/readme/README.<lang>.md` or `user-docs/<lang>/*.md` by hand.
+- Regenerate translations with the scripts (they translate via `pi`):
+  - `python3 scripts/build_readmes.py` — root `README.md` → `user-docs/readme/README.<lang>.md`
+  - `python3 scripts/build_userdocs.py` — `user-docs/en/*.md` → `user-docs/<lang>/*.md`
+  - Pass language codes to rebuild a subset, e.g. `python3 scripts/build_userdocs.py es ja`.
+- To add a language: write the English first, add the code + native name to the `LANGS` (and `TRANSLATE_TARGET`) lists in both scripts and the nav, then run the scripts for the new code.
+
 ## Testing
 
 ```bash
