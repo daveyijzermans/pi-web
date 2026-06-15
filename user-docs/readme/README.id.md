@@ -1,4 +1,4 @@
-# pi-web (Remote Control Your Pi)
+<h1 align="center">pi-web (Remote Control Your Pi)</h1>
 
 <div align="center">
 
