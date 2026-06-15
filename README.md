@@ -102,6 +102,3 @@ make check   # frontend test/build + Go test/vet
 make build   # setup if needed, build frontend, then build ./pi-web
 ```
 
-## License
-
-MIT
