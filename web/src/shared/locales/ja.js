@@ -373,4 +373,10 @@ export default {
     'クリップボードを利用できません — テンプレートを下に挿入しました。',
   'settings.invalidJson': '無効な JSON：{error}',
   'settings.expectedArray': '{ "code", "label", "strings" } オブジェクトの配列が必要です。',
+
+  // ── Not found (404) ──
+  'notFound.heading': 'このページは迷子になりました',
+  'notFound.message': '猫でも見つけられませんでした。ホームに戻りましょう。',
+  'notFound.back': 'セッションに戻る',
+  'notFound.catAlt': '困っている猫',
 };

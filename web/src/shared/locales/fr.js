@@ -377,4 +377,10 @@ export default {
     'Presse-papiers indisponible — le modèle a été inséré ci-dessous.',
   'settings.invalidJson': 'JSON invalide : {error}',
   'settings.expectedArray': 'Un tableau d’objets { "code", "label", "strings" } était attendu.',
+
+  // ── Not found (404) ──
+  'notFound.heading': 'Cette page s’est égarée',
+  'notFound.message': 'Même le chat ne l’a pas trouvée. Rentrons à la maison.',
+  'notFound.back': 'Retour aux sessions',
+  'notFound.catAlt': 'Un chat perplexe',
 };

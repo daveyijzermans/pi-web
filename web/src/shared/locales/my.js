@@ -376,4 +376,10 @@ export default {
   'settings.invalidJson': 'JSON မမှန်ကန်− {error}',
   'settings.expectedArray':
     '{ "code", "label", "strings" } object များ၏ array တစ်ခု မျှော်လင့်ထားသည်။',
+
+  // ── Not found (404) ──
+  'notFound.heading': 'ဤစာမျက်နှာ ပျောက်သွားပါပြီ',
+  'notFound.message': 'ကြောင်တောင်မှ ရှာမတွေ့ပါ။ ပင်မစာမျက်နှာသို့ ပြန်သွားကြရအောင်။',
+  'notFound.back': 'ဆက်ရှင်များသို့ ပြန်သွားရန်',
+  'notFound.catAlt': 'ကြောင်တစ်ကောင်',
 };

@@ -375,4 +375,10 @@ export default {
   'settings.clipboardUnavailable': 'Portapapeles no disponible — se insertó la plantilla abajo.',
   'settings.invalidJson': 'JSON no válido: {error}',
   'settings.expectedArray': 'Se esperaba un arreglo de objetos { "code", "label", "strings" }.',
+
+  // ── Not found (404) ──
+  'notFound.heading': 'Esta página se perdió',
+  'notFound.message': 'Ni el gato pudo encontrarla. Volvamos al inicio.',
+  'notFound.back': 'Volver a las sesiones',
+  'notFound.catAlt': 'Un gato desconcertado',
 };

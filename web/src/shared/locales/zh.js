@@ -364,4 +364,10 @@ export default {
   'settings.clipboardUnavailable': '剪贴板不可用——已将模板插入下方。',
   'settings.invalidJson': 'JSON 无效：{error}',
   'settings.expectedArray': '应为 { "code", "label", "strings" } 对象的数组。',
+
+  // ── Not found (404) ──
+  'notFound.heading': '这个页面走丢了',
+  'notFound.message': '连猫都找不到它。我们回首页吧。',
+  'notFound.back': '返回会话',
+  'notFound.catAlt': '一只困惑的猫',
 };

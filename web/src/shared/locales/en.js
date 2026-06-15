@@ -391,4 +391,10 @@ export default {
   'settings.clipboardUnavailable': 'Clipboard unavailable — inserted the template below.',
   'settings.invalidJson': 'Invalid JSON: {error}',
   'settings.expectedArray': 'Expected an array of { "code", "label", "strings" } objects.',
+
+  // ── Not found (404) ──
+  'notFound.heading': 'This page wandered off',
+  'notFound.message': "Even the cat couldn't sniff it out. Let's get you home.",
+  'notFound.back': 'Back to sessions',
+  'notFound.catAlt': 'A puzzled cat',
 };

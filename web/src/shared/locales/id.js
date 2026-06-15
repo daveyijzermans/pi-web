@@ -373,4 +373,10 @@ export default {
   'settings.clipboardUnavailable': 'Papan klip tidak tersedia — templat disisipkan di bawah.',
   'settings.invalidJson': 'JSON tidak valid: {error}',
   'settings.expectedArray': 'Diharapkan array objek { "code", "label", "strings" }.',
+
+  // ── Not found (404) ──
+  'notFound.heading': 'Halaman ini tersesat',
+  'notFound.message': 'Kucing pun tidak menemukannya. Ayo kembali ke beranda.',
+  'notFound.back': 'Kembali ke sesi',
+  'notFound.catAlt': 'Kucing yang kebingungan',
 };

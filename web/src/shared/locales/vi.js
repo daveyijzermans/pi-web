@@ -370,4 +370,10 @@ export default {
   'settings.clipboardUnavailable': 'Bảng nhớ tạm không khả dụng — đã chèn mẫu bên dưới.',
   'settings.invalidJson': 'JSON không hợp lệ: {error}',
   'settings.expectedArray': 'Mong đợi một mảng các đối tượng { "code", "label", "strings" }.',
+
+  // ── Not found (404) ──
+  'notFound.heading': 'Trang này đã đi lạc',
+  'notFound.message': 'Ngay cả mèo cũng không tìm thấy. Hãy quay về trang chủ.',
+  'notFound.back': 'Quay lại phiên',
+  'notFound.catAlt': 'Một chú mèo bối rối',
 };

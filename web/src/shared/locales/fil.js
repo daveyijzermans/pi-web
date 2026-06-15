@@ -379,4 +379,10 @@ export default {
     'Hindi available ang clipboard — inilagay ang template sa ibaba.',
   'settings.invalidJson': 'Hindi wastong JSON: {error}',
   'settings.expectedArray': 'Inaasahan ang array ng mga object na { "code", "label", "strings" }.',
+
+  // ── Not found (404) ──
+  'notFound.heading': 'Naligaw ang pahinang ito',
+  'notFound.message': 'Kahit ang pusa ay hindi ito makita. Bumalik na tayo sa simula.',
+  'notFound.back': 'Bumalik sa mga session',
+  'notFound.catAlt': 'Isang nalitong pusa',
 };

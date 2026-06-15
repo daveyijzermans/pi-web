@@ -369,4 +369,10 @@ export default {
   'settings.clipboardUnavailable': 'ຄລິບບອດໃຊ້ບໍ່ໄດ້ — ໄດ້ແຊກແມ່ແບບໄວ້ດ້ານລຸ່ມ.',
   'settings.invalidJson': 'JSON ບໍ່ຖືກຕ້ອງ: {error}',
   'settings.expectedArray': 'ຄາດວ່າຈະເປັນ array ຂອງ object { "code", "label", "strings" }.',
+
+  // ── Not found (404) ──
+  'notFound.heading': 'ໜ້ານີ້ຫຼົງທາງໄປແລ້ວ',
+  'notFound.message': 'ແມ່ນແຕ່ແມວກໍຫາບໍ່ເຫັນ. ກັບໄປໜ້າຫຼັກກັນເທາະ.',
+  'notFound.back': 'ກັບໄປທີ່ເຊດຊັນ',
+  'notFound.catAlt': 'ແມວທີ່ສັບສົນ',
 };

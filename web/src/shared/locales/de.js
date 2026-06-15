@@ -377,4 +377,10 @@ export default {
     'Zwischenablage nicht verfügbar — die Vorlage wurde unten eingefügt.',
   'settings.invalidJson': 'Ungültiges JSON: {error}',
   'settings.expectedArray': 'Ein Array aus { "code", "label", "strings" }-Objekten wurde erwartet.',
+
+  // ── Not found (404) ──
+  'notFound.heading': 'Diese Seite ist verschwunden',
+  'notFound.message': 'Selbst die Katze hat sie nicht gefunden. Zurück nach Hause.',
+  'notFound.back': 'Zurück zu den Sitzungen',
+  'notFound.catAlt': 'Eine verwirrte Katze',
 };

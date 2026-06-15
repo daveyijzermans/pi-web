@@ -373,4 +373,10 @@ export default {
   'settings.clipboardUnavailable': 'Papan keratan tidak tersedia — templat dimasukkan di bawah.',
   'settings.invalidJson': 'JSON tidak sah: {error}',
   'settings.expectedArray': 'Dijangka tatasusunan objek { "code", "label", "strings" }.',
+
+  // ── Not found (404) ──
+  'notFound.heading': 'Halaman ini telah hilang',
+  'notFound.message': 'Kucing pun tidak menjumpainya. Mari kembali ke laman utama.',
+  'notFound.back': 'Kembali ke sesi',
+  'notFound.catAlt': 'Seekor kucing yang keliru',
 };

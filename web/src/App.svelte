@@ -3,6 +3,7 @@
   import SessionsPage from './routes/SessionsPage.svelte';
   import SessionPage from './routes/SessionPage.svelte';
   import SettingsPage from './routes/SettingsPage.svelte';
+  import NotFoundPage from './routes/NotFoundPage.svelte';
   import VersionController from './components/shared/VersionController.svelte';
 
   let {
@@ -71,7 +72,7 @@
 {:else if path === '/settings'}
   <SettingsPage />
 {:else}
-  <section class="svelte-spa-probe" aria-label="Svelte app probe">Svelte ready for pi-web</section>
+  <NotFoundPage />
 {/if}
 
 <VersionController />

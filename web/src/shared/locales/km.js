@@ -369,4 +369,10 @@ export default {
   'settings.clipboardUnavailable': 'ក្ដារតម្បៀតខ្ទាស់មិនមាន — បានបញ្ចូលគំរូខាងក្រោម។',
   'settings.invalidJson': 'JSON មិនត្រឹមត្រូវ៖ {error}',
   'settings.expectedArray': 'រំពឹងថាជា array នៃ object { "code", "label", "strings" }។',
+
+  // ── Not found (404) ──
+  'notFound.heading': 'ទំព័រនេះបានវង្វេងបាត់',
+  'notFound.message': 'សូម្បីតែឆ្មាក៏រកមិនឃើញ។ តោះត្រឡប់ទៅទំព័រដើមវិញ។',
+  'notFound.back': 'ត្រឡប់ទៅវគ្គ',
+  'notFound.catAlt': 'ឆ្មាដែលងឿងឆ្ងល់',
 };

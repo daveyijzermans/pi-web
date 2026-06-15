@@ -370,4 +370,10 @@ export default {
   'settings.clipboardUnavailable': 'คลิปบอร์ดใช้งานไม่ได้ — แทรกเทมเพลตไว้ด้านล่าง',
   'settings.invalidJson': 'JSON ไม่ถูกต้อง: {error}',
   'settings.expectedArray': 'คาดว่าจะเป็นอาร์เรย์ของออบเจกต์ { "code", "label", "strings" }',
+
+  // ── Not found (404) ──
+  'notFound.heading': 'หน้านี้หายไปแล้ว',
+  'notFound.message': 'ขนาดแมวยังหาไม่เจอเลย กลับหน้าหลักกันเถอะ',
+  'notFound.back': 'กลับไปที่เซสชัน',
+  'notFound.catAlt': 'แมวที่งุนงง',
 };
