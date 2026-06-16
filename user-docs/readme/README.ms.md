@@ -12,86 +12,91 @@
 
 </div>
 
-Kawal [pi](https://pi.dev) coding agent anda dari telefon, tablet, atau komputer riba — di mana-mana sahaja dalam rangkaian anda, atau dari jauh melalui Tailscale.
+---
+<div align="center">
 
-Ia adalah PWA penuh, jadi anda boleh memasangnya dan menggunakannya seperti aplikasi asli pada mana-mana peranti. Anggaplah ia sebagai ruang kerja AI peribadi anda sendiri — seperti Cowork milik Claude, tetapi dengan pelbagai model — berbual merentasi model, menulis kod dari telefon anda, atau jadikannya [pembantu peribadi](../ms/personal-assistant.md) yang tinggal di mesin anda.
+Pandu ejen pengekodan [pi](https://pi.dev) anda dari telefon, tablet, atau komputer riba — di mana-mana sahaja dalam rangkaian anda, atau dari jauh melalui Tailscale.
 
-Jadikannya milik anda: tukar tema dan fon, dan gunakannya dalam bahasa anda sendiri — pi-web disertakan dengan pelbagai bahasa dan anda boleh menambah bahasa anda sendiri. Lebih banyak ciri sedang dalam perjalanan, tetapi ia tidak akan menjadi sarat: apa-apa yang anda tidak perlukan boleh dimatikan dalam tetapan.
+Ia adalah PWA penuh, jadi anda boleh memasangnya dan menggunakannya seperti aplikasi asli pada mana-mana peranti. Anggaplah ia sebagai ruang kerja AI peribadi anda sendiri — seperti Cowork Claude, tetapi dengan pelbagai model — berbual merentas model, mengekod dari telefon anda, atau jadikannya sebagai [pembantu peribadi](user-docs/en/personal-assistant.md) yang hidup pada mesin anda.
+
+Jadikannya milik anda: tukar tema dan fon, dan gunakannya dalam bahasa anda sendiri — pi-web disertakan dengan pelbagai bahasa dan anda boleh menambah bahasa anda sendiri. Lebih banyak ciri akan datang, tetapi ia tidak akan menjadi gemuk: apa-apa yang anda tidak perlukan boleh dimatikan dalam tetapan.
+
+</div>
 
 > [!WARNING]
-> pi-web kini dalam versi **beta**. Banyak perkara akan berubah dan rosak!
+> pi-web kini dalam **beta**. Perkara akan berubah dan rosak!
 
 > [!TIP]
-> Baru di sini? **[Baca panduan pengguna →](../ms/README.md)** untuk lawatan penuh ciri, langkah pemasangan, dan petua.
+> Baru di sini? **[Baca panduan pengguna →](user-docs/en/README.md)** untuk lawatan penuh ciri, langkah pemasangan, dan petua. ([Bahasa lain →](../README.md))
 
 ## Tangkapan Skrin
 
 <div align="center">
-  <img src="../assets/desktop-dark-mode.png" alt="Desktop — mod gelap" width="90%" /><br />
+  <img src="../assets/desktop-dark-mode.png" alt="Desktop — dark mode" width="90%" /><br />
   <em>Desktop — mod gelap</em>
   <br /><br />
-  <img src="../assets/desktop-white-mode.png" alt="Desktop — mod terang" width="90%" /><br />
-  <em>Desktop — mod terang</em>
+  <img src="../assets/desktop-white-mode.png" alt="Desktop — light mode" width="90%" /><br />
+  <em>Desktop — mod cerah</em>
   <br /><br />
   <img src="../assets/mobile-pwa.png" alt="Mobile PWA" width="90%" /><br />
   <em>Mobile PWA</em>
 </div>
 
-## Bagaimana Ia Bersatu
+## Bagaimana Ia Saling Melengkapi
 
 ```
- pi (terminal)                 Browser (phone / tablet / laptop)
+ pi (terminal)                 Pelayar (telefon / tablet / komputer riba)
       │                                │
-      │  writes JSONL                  │  HTTP + SSE
+      │  menulis JSONL                 │  HTTP + SSE
       ▼                                ▼
- ~/.pi/agent/sessions/  ←───  pi-web (Go HTTP server)
+ ~/.pi/agent/sessions/  ←───  pi-web (pelayan HTTP Go)
                                       │
                     ┌─────────────────┼─────────────────┐
                     │                 │                 │
               pi --mode rpc      fsnotify         tailscale serve
-            (per‑session       (live reload)      (remote HTTPS
-             chat worker)                           via MagicDNS)
+            (pekerja sembang    (muat semula     (HTTPS jauh
+             per-sesi)           langsung)        melalui MagicDNS)
 ```
 
-- **pi** menulis JSONL perbualan ke `~/.pi/agent/sessions/` semasa ia berfungsi.
+- **pi** menulis JSONL perbualan ke `~/.pi/agent/sessions/` semasa ia bekerja.
 - **pi-web** ialah pelayan Go yang membaca fail tersebut, memaparkannya dalam pelayar, dan menstrim kemas kini langsung melalui SSE.
-- **pi --mode rpc** pekerja mengendalikan perbualan yang dimulakan pelayar — satu setiap sesi, dihapuskan selepas 10 minit melahu.
-- **fsnotify** memantau direktori sesi supaya pelayar memuat semula dalam masa milisaat selepas output baru muncul.
+- Pekerja **pi --mode rpc** mengendalikan sembang yang dimulakan oleh pelayar — satu per sesi, dihapuskan selepas 10 minit melahu.
+- **fsnotify** memantau direktori sesi supaya pelayar memuat semula dalam milisaat selepas output baharu.
 - **Tailscale Serve** menerbitkan pelayan localhost sebagai titik akhir HTTPS pada tailnet anda.
 
-## Pemasangan
+## Pasang
 
 ```bash
 pi install npm:@ygncode/pi-web@beta
 ```
 
-Itu sahaja — ia memuat turun binari yang sepadan, menyediakan auto-mula, dan mendaftarkan arahan `/web`, `/pi-web`, `/remote`, dan `/refresh`.
+Itu sahaja — ia memuat turun binari yang sepadan, menyediakan permulaan automatik, dan mendaftarkan perintah `/web`, `/pi-web`, `/remote`, dan `/refresh`.
 
-Setelah dipasang, buka `http://127.0.0.1:31415` dalam pelayar anda. Dari pi, gunakan `/web` untuk membuka sesi semasa dalam pelayar anda serta-merta. Jika Tailscale sedang berjalan pada mesin anda, pi-web menerbitkan titik akhir HTTPS secara automatik pada tailnet anda — gunakan `/remote` dari pi untuk mendapatkan kod QR dan URL untuk mana-mana peranti pada tailnet anda.
+Setelah dipasang, buka `http://127.0.0.1:31415` dalam pelayar anda. Dari pi, gunakan `/web` untuk membuka sesi semasa dalam pelayar anda dengan serta-merta. Jika Tailscale sedang berjalan pada mesin anda, pi-web secara automatik menerbitkan titik akhir HTTPS pada tailnet anda — gunakan `/remote` dari pi untuk mendapatkan kod QR dan URL untuk mana-mana peranti pada tailnet anda.
 
-Untuk pemasangan manual, muat turun binari, atau binaan dari sumber, lihat [user-docs/install.md](../ms/install.md).
+Untuk pemasangan manual, muat turun binari, atau binaan dari sumber, lihat [user-docs/install.md](user-docs/en/install.md).
 
 ## Integrasi Pi
 
 Selepas `pi install npm:@ygncode/pi-web@beta`, anda mendapat:
 
-| Arahan | Fungsinya |
-|---------|--------------|
+| Perintah | Fungsinya |
+|----------|-----------|
 | `/web` | Buka sesi semasa dalam pelayar anda (sedar SSH: langkau pelayar dan tunjukkan URL sahaja) |
 | `/pi-web` | Tunjukkan status, versi, mula/henti/mula semula pelayan, atau kemas kini |
 | `/remote` | Tunjukkan kod QR dan URL untuk akses jauh melalui Tailscale |
-| `/refresh` | Tarik mesej baru yang ditulis dari pelayar jauh kembali ke sesi terminal |
+| `/refresh` | Tarik mesej baharu yang ditulis dari pelayar jauh kembali ke sesi terminal |
 
-**Auto-tajuk** sesi dibina terus ke dalam pi-web dan dikonfigurasi pada halaman `/settings`. Ia **dihidupkan secara lalai** dan menamakan sesi secara automatik. Anda boleh memilih:
+**Penajukan automatik** sesi dibina ke dalam pi-web sendiri dan dikonfigurasikan pada halaman `/settings`. Ia **dihidupkan secara lalai** dan menamakan sesi secara automatik. Anda boleh memilih:
 
-- **Bila untuk menajuk** — sekali setiap sesi, atau pada setiap mesej baru (lalai).
-- **Model tajuk** — **heuristik kata terbina (tanpa AI)** yang percuma dan serta-merta secara lalai, atau pilih model (contohnya yang kecil/pantas) untuk tajuk yang lebih pintar dan ditulis oleh model.
+- **Bila untuk menajuk** — sekali setiap sesi, atau pada setiap mesej baharu (lalai).
+- **Model tajuk** — **heuristik perkataan terbina dalam percuma dan pantas (tiada AI)** secara lalai, atau pilih model (cth. yang kecil/pantas) untuk tajuk yang lebih pintar, ditulis oleh model.
 
-Pakej ini juga memasang binari pi-web ke `~/.pi/agent/bin/pi-web` dan menyediakan auto-mula semasa log masuk.
+Pakej ini juga memasang binari pi-web ke `~/.pi/agent/bin/pi-web` dan menyediakan permulaan automatik semasa log masuk.
 
-## Auto-Mula Semasa Log Masuk
+## Permulaan Automatik Semasa Log Masuk
 
-Arahan `pi install npm:@ygncode/pi-web@beta` menyediakan ini secara automatik:
+Perintah `pi install npm:@ygncode/pi-web@beta` menyediakan ini secara automatik:
 
 | OS | Mekanisme |
 |----|-----------|
@@ -101,15 +106,15 @@ Arahan `pi install npm:@ygncode/pi-web@beta` menyediakan ini secara automatik:
 Untuk menetapkan token untuk akses jauh, cipta `~/.config/pi-web/env`:
 
 ```
-PI_WEB_TOKEN=your-token-here
+PI_WEB_TOKEN=token-anda-di-sini
 ```
 
-Untuk butiran lanjut (penyediaan manual, port tersuai, ikatan bukan-loopback), lihat [user-docs/install.md](../ms/install.md).
+Untuk butiran lanjut (persediaan manual, port tersuai, ikatan bukan loopback), lihat [user-docs/install.md](user-docs/en/install.md).
 
 ## Pembangunan
 
 ```bash
-make setup   # pasang dependensi frontend dan muat turun modul Go
-make check   # ujian/bina frontend + ujian/vet Go
+make setup   # pasang kebergantungan frontend dan muat turun modul Go
+make check   # ujian/pembinaan frontend + ujian/vet Go
 make build   # setup jika perlu, bina frontend, kemudian bina ./pi-web
 ```

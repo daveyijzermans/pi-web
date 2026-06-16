@@ -45,7 +45,7 @@ TRANSLATE_TARGET = {
 
 
 def extract_body(text: str) -> str:
-    marker = "Drive your [pi]"
+    marker = '<div align="center">\n\nDrive your [pi]'
     idx = text.index(marker)
     return text[idx:]
 

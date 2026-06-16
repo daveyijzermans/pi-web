@@ -12,11 +12,15 @@
 
 </div>
 
+<div align="center">
+
 Drive your [pi](https://pi.dev) coding agent from your phone, tablet, or laptop — anywhere on your network, or remotely over Tailscale.
 
 It's a full PWA, so you can install it and use it like a native app on any device. Think of it as your own personal AI workspace — like Claude's Cowork, but with different models — chat across models, code from your phone, or turn it into a [personal assistant](user-docs/en/personal-assistant.md) that lives on your machine.
 
 Make it yours: switch themes and fonts, and use it in your own language — pi-web ships with multiple languages and you can add your own. More features are on the way, but it won't get bloated: anything you don't need can be turned off in settings.
+
+</div>
 
 > [!WARNING]
 > pi-web is currently in **beta**. Things will change and break!
