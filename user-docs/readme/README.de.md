@@ -31,13 +31,10 @@ Mach es zu deinem: Wechsle Themes und Schriften und nutze es in deiner eigenen S
 ## Screenshots
 
 <div align="center">
-  <img src="../assets/desktop-dark-mode.png" alt="Desktop — dunkler Modus" width="90%" /><br />
-  <em>Desktop — dunkler Modus</em>
+  <img src="../assets/pi-web-desktop-screenshot.png" alt="Desktop" width="90%" /><br />
+  <em>Desktop</em>
   <br /><br />
-  <img src="../assets/desktop-white-mode.png" alt="Desktop — heller Modus" width="90%" /><br />
-  <em>Desktop — heller Modus</em>
-  <br /><br />
-  <img src="../assets/mobile-pwa.png" alt="Mobile PWA" width="90%" /><br />
+  <img src="../assets/pi-web-mobile-screenshot.png" alt="Mobile PWA" width="90%" /><br />
   <em>Mobile PWA</em>
 </div>
 

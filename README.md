@@ -31,14 +31,11 @@ Make it yours: switch themes and fonts, and use it in your own language — pi-w
 ## Screenshots
 
 <div align="center">
-  <img src="user-docs/assets/desktop-dark-mode.png" alt="Desktop — dark mode" width="90%" /><br />
-  <em>Desktop — dark mode</em>
+  <img src="user-docs/assets/pi-web-desktop-screenshot.png" alt="Desktop" width="90%" /><br />
+  <em>Desktop</em>
   <br /><br />
-  <img src="user-docs/assets/desktop-white-mode.png" alt="Desktop — light mode" width="90%" /><br />
-  <em>Desktop — light mode</em>
-  <br /><br />
-  <img src="user-docs/assets/mobile-pwa.png" alt="Mobile PWA" width="90%" /><br />
-  <em>Mobile PWA</em>
+  <img src="user-docs/assets/pi-web-mobile-screenshot.png" alt="Mobile" width="90%" /><br />
+  <em>Mobile</em>
 </div>
 
 ## How It Fits Together

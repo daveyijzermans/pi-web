@@ -32,13 +32,10 @@ Jadikannya milik anda: tukar tema dan fon, dan gunakannya dalam bahasa anda send
 ## Tangkapan Skrin
 
 <div align="center">
-  <img src="../assets/desktop-dark-mode.png" alt="Desktop — dark mode" width="90%" /><br />
-  <em>Desktop — mod gelap</em>
+  <img src="../assets/pi-web-desktop-screenshot.png" alt="Desktop" width="90%" /><br />
+  <em>Desktop</em>
   <br /><br />
-  <img src="../assets/desktop-white-mode.png" alt="Desktop — light mode" width="90%" /><br />
-  <em>Desktop — mod cerah</em>
-  <br /><br />
-  <img src="../assets/mobile-pwa.png" alt="Mobile PWA" width="90%" /><br />
+  <img src="../assets/pi-web-mobile-screenshot.png" alt="Mobile PWA" width="90%" /><br />
   <em>Mobile PWA</em>
 </div>
 

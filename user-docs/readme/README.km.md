@@ -31,13 +31,10 @@
 ## រូបថតអេក្រង់
 
 <div align="center">
-  <img src="../assets/desktop-dark-mode.png" alt="Desktop — dark mode" width="90%" /><br />
-  <em>កុំព្យូទ័រលើតុ — របៀបងងឹត</em>
+  <img src="../assets/pi-web-desktop-screenshot.png" alt="Desktop" width="90%" /><br />
+  <em>កុំព្យូទ័រលើតុ</em>
   <br /><br />
-  <img src="../assets/desktop-white-mode.png" alt="Desktop — light mode" width="90%" /><br />
-  <em>កុំព្យូទ័រលើតុ — របៀបភ្លឺ</em>
-  <br /><br />
-  <img src="../assets/mobile-pwa.png" alt="Mobile PWA" width="90%" /><br />
+  <img src="../assets/pi-web-mobile-screenshot.png" alt="Mobile PWA" width="90%" /><br />
   <em>ទូរសព្ទ PWA</em>
 </div>
 

@@ -31,13 +31,10 @@
 ## 截图
 
 <div align="center">
-  <img src="../assets/desktop-dark-mode.png" alt="桌面端 — 深色模式" width="90%" /><br />
-  <em>桌面端 — 深色模式</em>
+  <img src="../assets/pi-web-desktop-screenshot.png" alt="桌面端" width="90%" /><br />
+  <em>桌面端</em>
   <br /><br />
-  <img src="../assets/desktop-white-mode.png" alt="桌面端 — 浅色模式" width="90%" /><br />
-  <em>桌面端 — 浅色模式</em>
-  <br /><br />
-  <img src="../assets/mobile-pwa.png" alt="移动端 PWA" width="90%" /><br />
+  <img src="../assets/pi-web-mobile-screenshot.png" alt="移动端 PWA" width="90%" /><br />
   <em>移动端 PWA</em>
 </div>
 

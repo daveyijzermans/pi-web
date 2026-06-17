@@ -31,13 +31,10 @@ Hazlo tuyo: cambia temas y fuentes, y úsalo en tu propio idioma — pi-web incl
 ## Capturas de pantalla
 
 <div align="center">
-  <img src="../assets/desktop-dark-mode.png" alt="Desktop — dark mode" width="90%" /><br />
-  <em>Escritorio — modo oscuro</em>
+  <img src="../assets/pi-web-desktop-screenshot.png" alt="Desktop" width="90%" /><br />
+  <em>Escritorio</em>
   <br /><br />
-  <img src="../assets/desktop-white-mode.png" alt="Desktop — light mode" width="90%" /><br />
-  <em>Escritorio — modo claro</em>
-  <br /><br />
-  <img src="../assets/mobile-pwa.png" alt="Mobile PWA" width="90%" /><br />
+  <img src="../assets/pi-web-mobile-screenshot.png" alt="Mobile PWA" width="90%" /><br />
   <em>PWA móvil</em>
 </div>
 

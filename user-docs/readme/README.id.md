@@ -31,13 +31,10 @@ Jadikan milik Anda: ganti tema dan font, dan gunakan dalam bahasa Anda sendiri �
 ## Tangkapan Layar
 
 <div align="center">
-  <img src="../assets/desktop-dark-mode.png" alt="Desktop — mode gelap" width="90%" /><br />
-  <em>Desktop — mode gelap</em>
+  <img src="../assets/pi-web-desktop-screenshot.png" alt="Desktop" width="90%" /><br />
+  <em>Desktop</em>
   <br /><br />
-  <img src="../assets/desktop-white-mode.png" alt="Desktop — mode terang" width="90%" /><br />
-  <em>Desktop — mode terang</em>
-  <br /><br />
-  <img src="../assets/mobile-pwa.png" alt="PWA Seluler" width="90%" /><br />
+  <img src="../assets/pi-web-mobile-screenshot.png" alt="PWA Seluler" width="90%" /><br />
   <em>PWA Seluler</em>
 </div>
 

@@ -31,13 +31,10 @@ Gawin itong sa iyo: magpalit ng mga tema at font, at gamitin ito sa iyong sarili
 ## Mga Screenshot
 
 <div align="center">
-  <img src="../assets/desktop-dark-mode.png" alt="Desktop — dark mode" width="90%" /><br />
-  <em>Desktop — dark mode</em>
+  <img src="../assets/pi-web-desktop-screenshot.png" alt="Desktop" width="90%" /><br />
+  <em>Desktop</em>
   <br /><br />
-  <img src="../assets/desktop-white-mode.png" alt="Desktop — light mode" width="90%" /><br />
-  <em>Desktop — light mode</em>
-  <br /><br />
-  <img src="../assets/mobile-pwa.png" alt="Mobile PWA" width="90%" /><br />
+  <img src="../assets/pi-web-mobile-screenshot.png" alt="Mobile PWA" width="90%" /><br />
   <em>Mobile PWA</em>
 </div>
 
