@@ -7,47 +7,7 @@
 .schedules-page {
   max-width: 880px;
   margin: 0 auto;
-  padding: 32px 20px 80px;
-}
-
-/* ── Header ── */
-.schedules-page .schedules-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 28px;
-}
-.schedules-page .schedules-title {
-  flex: 1;
-  margin: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 22px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  color: var(--text);
-}
-.schedules-page .schedules-title .sched-ico {
-  color: var(--accent);
-}
-.schedules-page .sched-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  padding: 4px 6px;
-  border-radius: 6px;
-  transition: color 0.12s, background 0.12s;
-}
-.schedules-page .sched-back:hover {
-  color: var(--text);
-  background: var(--surface-2);
+  padding: calc(52px + env(safe-area-inset-top) + 24px) 20px 80px;
 }
 
 .sched-ico {
@@ -459,7 +419,7 @@
 
 @media (max-width: 900px) {
   .schedules-page {
-    padding: 20px 14px 96px;
+    padding: calc(52px + env(safe-area-inset-top) + 16px) 14px 96px;
   }
   .schedules-page .run-time {
     min-width: 0;
@@ -468,11 +428,10 @@
     flex: 1;
     justify-content: center;
   }
-  /* On mobile the floating + replaces the header button. */
-  .schedules-page .schedules-header .sched-btn-primary {
-    display: none;
-  }
   .sched-fab {
     display: flex;
+  }
+  .schedules-header-new {
+    display: none;
   }
 }

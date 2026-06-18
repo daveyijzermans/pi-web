@@ -11,7 +11,6 @@
   import {
     icon,
     CalendarClock,
-    ChevronLeft,
     Clock,
     ExternalLink,
     ListTree,
@@ -323,27 +322,34 @@
 
 <!-- eslint-disable svelte/no-at-html-tags -- trusted: Lucide icon SVG from icons.js -->
 
-<div class="schedules-page">
-  <header class="schedules-header">
-    <button type="button" class="sched-back" onclick={() => navigate('/')}>
-      <span class="sched-ico" aria-hidden="true">{@html icon(ChevronLeft, { size: 16 })}</span>
-      <span>{t('schedules.backToSessions')}</span>
-    </button>
-    <h1 class="schedules-title">
-      <span class="sched-ico" aria-hidden="true">{@html icon(CalendarClock, { size: 20 })}</span>
-      {t('schedules.title')}
-    </h1>
+<div class="session-header-bar">
+  <div class="session-header-left">
+    <a
+      href="/"
+      class="session-header-back"
+      onclick={(e) => {
+        e.preventDefault();
+        navigate('/');
+      }}><span>←</span> {t('session.back')}</a
+    >
+  </div>
+  <span class="session-header-title">{t('schedules.title')}</span>
+  <div class="session-header-right">
     <button
       type="button"
-      class="sched-btn sched-btn-primary"
+      class="session-header-new schedules-header-new"
       data-testid="schedule-new"
+      title={t('schedules.new')}
+      aria-label={t('schedules.new')}
       onclick={openCreate}
+      >{@html icon(Plus, { size: 14 })}<span class="session-header-new-label"
+        >{t('schedules.new')}</span
+      ></button
     >
-      <span class="sched-ico" aria-hidden="true">{@html icon(Plus, { size: 15 })}</span>
-      <span>{t('schedules.new')}</span>
-    </button>
-  </header>
+  </div>
+</div>
 
+<div class="schedules-page">
   {#if loadError}
     <p class="sched-error" role="alert">{loadError}</p>
   {/if}

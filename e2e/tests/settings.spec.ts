@@ -22,9 +22,18 @@ const LAYOUT = '[data-setting="pi-sessions:view-layout"]';
 // shared server-side state without affecting other specs.
 const SPINNER = '[data-setting="pi-sessions:spinner-style"]';
 
+// The sidebar nav replaces the old single-stack layout: each section is hidden
+// until its sidebar entry is clicked. On mobile the click also drills into the
+// pane view; on desktop the active section is already shown but clicking is a
+// no-op, so calling this unconditionally keeps the tests viewport-agnostic.
+async function openSection(page: import("@playwright/test").Page, id: string) {
+  await page.locator(`[data-settings-nav="${id}"]`).click();
+}
+
 test.describe("settings page", () => {
   test("loads with controls", async ({ page }) => {
     await page.goto("/settings");
+    await openSection(page, "sessionsList");
     await expect(page.locator(LAYOUT)).toBeVisible();
   });
 
@@ -37,19 +46,22 @@ test.describe("settings page", () => {
     expect(await css.text()).toContain(`--body-bg: rgb(1, 2, 3)`);
 
     await page.goto("/settings");
+    await openSection(page, "appearance");
     const select = page.locator('[data-setting="pi-web-theme"]');
     await expect(select).toBeVisible();
 
     if ((await select.inputValue()) === "custom") {
       const savedDark = page.waitForResponse(
-        (r) => r.url().includes("/api/settings") && r.request().method() === "POST",
+        (r) =>
+          r.url().includes("/api/settings") && r.request().method() === "POST",
       );
       await select.selectOption("dark");
       await savedDark;
     }
 
     const savedCustom = page.waitForResponse(
-      (r) => r.url().includes("/api/settings") && r.request().method() === "POST",
+      (r) =>
+        r.url().includes("/api/settings") && r.request().method() === "POST",
     );
     await select.selectOption("custom");
     await savedCustom;
@@ -58,20 +70,25 @@ test.describe("settings page", () => {
       .poll(() => page.evaluate(() => document.documentElement.dataset.theme))
       .toBe("custom");
     await expect
-      .poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor))
+      .poll(() =>
+        page.evaluate(() => getComputedStyle(document.body).backgroundColor),
+      )
       .toBe("rgb(1, 2, 3)");
   });
 
   // Settings persist in one global server-side store; running this on all 7
   // projects in parallel would race on the same key. Persistence is
   // browser-independent, so verify it on a single project.
-  test("persists a setting server-side across reload", async ({ page }, testInfo) => {
+  test("persists a setting server-side across reload", async ({
+    page,
+  }, testInfo) => {
     test.skip(
       testInfo.project.name !== "Desktop Chrome",
       "server-side persistence is browser-independent; run once",
     );
 
     await page.goto("/settings");
+    await openSection(page, "sessionsList");
     const select = page.locator(SPINNER);
     await expect(select).toBeVisible();
 
@@ -80,7 +97,8 @@ test.describe("settings page", () => {
 
     // Changing the control writes through to the server via POST /api/settings.
     const saved = page.waitForResponse(
-      (r) => r.url().includes("/api/settings") && r.request().method() === "POST",
+      (r) =>
+        r.url().includes("/api/settings") && r.request().method() === "POST",
     );
     await select.selectOption(next);
     await saved;
@@ -89,6 +107,9 @@ test.describe("settings page", () => {
     await page.evaluate(() => window.localStorage.clear());
     await page.reload();
 
+    // Reload returns to the default (Appearance) pane; re-enter Sessions List
+    // before asserting the round-tripped value.
+    await openSection(page, "sessionsList");
     await expect(page.locator(SPINNER)).toHaveValue(next);
   });
 
@@ -103,6 +124,7 @@ test.describe("settings page", () => {
     );
 
     await page.goto("/settings");
+    await openSection(page, "sessionsList");
     await expect(page.locator(LAYOUT)).toBeVisible();
 
     // Collect bounding-box widths of every select, number, and time input that
@@ -127,7 +149,9 @@ test.describe("settings page", () => {
 
   // Alignment: on narrow viewports (≤560px) rows must stack vertically so the
   // label and control don't compete for horizontal space.
-  test("rows stack vertically on narrow viewports", async ({ page }, testInfo) => {
+  test("rows stack vertically on narrow viewports", async ({
+    page,
+  }, testInfo) => {
     test.skip(
       testInfo.project.name !== "Desktop Chrome",
       "responsive stacking check runs on one project",
@@ -135,6 +159,7 @@ test.describe("settings page", () => {
 
     await page.setViewportSize({ width: 400, height: 800 });
     await page.goto("/settings");
+    await openSection(page, "sessionsList");
     await expect(page.locator(LAYOUT)).toBeVisible();
 
     const flexDirection = await page.evaluate(() => {
@@ -150,7 +175,9 @@ test.describe("settings page", () => {
   // svelte state_unsafe_mutation when the component mounts during a client-side
   // route swap (not a fresh page load), blanking the settings page. Direct loads
   // happened to be safe, so this only reproduces via in-app navigation.
-  test("client-side nav to settings is safe with a custom font set", async ({ page }) => {
+  test("client-side nav to settings is safe with a custom font set", async ({
+    page,
+  }) => {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
 
@@ -161,7 +188,9 @@ test.describe("settings page", () => {
     // hydration before we navigate).
     await page.route("**/api/settings", async (route) => {
       if (route.request().method() === "GET") {
-        await route.fulfill({ json: { settings: { "pi-web:v1:font-ui": "Comic Sans MS" } } });
+        await route.fulfill({
+          json: { settings: { "pi-web:v1:font-ui": "Comic Sans MS" } },
+        });
       } else {
         await route.fulfill({ json: { ok: true } });
       }
@@ -176,7 +205,65 @@ test.describe("settings page", () => {
     // The swap must complete: the settings page renders instead of blanking, and
     // no state_unsafe_mutation is thrown computing the font <select> value.
     await expect(page).toHaveURL(/\/settings$/);
-    await expect(page.locator(".settings-page h1")).toHaveText("Settings");
+    await expect(page.locator(".session-header-title")).toHaveText("Settings");
     expect(errors.filter((m) => /state_unsafe_mutation/.test(m))).toEqual([]);
+  });
+
+  // Sidebar navigation: clicking a section in the left nav swaps the visible
+  // pane. Only one section component is mounted at a time, so controls from
+  // other sections must be absent until their entry is clicked.
+  test("sidebar swaps section pane on click", async ({ page }, testInfo) => {
+    test.skip(
+      testInfo.project.name !== "Desktop Chrome",
+      "sidebar swap is viewport-agnostic on desktop; run once",
+    );
+
+    await page.goto("/settings");
+    // Appearance is the default pane; the theme control proves it.
+    await expect(page.locator('[data-setting="pi-web-theme"]')).toBeVisible();
+    await expect(page.locator(LAYOUT)).toHaveCount(0);
+
+    await page.locator('[data-settings-nav="sessionsList"]').click();
+    await expect(page.locator(LAYOUT)).toBeVisible();
+    await expect(page.locator('[data-setting="pi-web-theme"]')).toHaveCount(0);
+  });
+
+  // Mobile drill-in: at narrow widths the sidebar fills the viewport and the
+  // pane is hidden until a section is tapped; the header back arrow returns to
+  // the list. Mirrors the iOS Settings pattern.
+  test("mobile drill-in shows list, then pane, then list", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name !== "Desktop Chrome",
+      "mobile layout is viewport-driven, not browser-specific; run once",
+    );
+
+    await page.setViewportSize({ width: 400, height: 800 });
+    await page.goto("/settings");
+
+    // List view: sidebar items visible, pane (and its mounted default section)
+    // hidden by CSS until the user drills in.
+    await expect(
+      page.locator('[data-settings-nav="appearance"]'),
+    ).toBeVisible();
+    await expect(page.locator(".settings-pane")).toBeHidden();
+    await expect(page.locator(".session-header-title")).toHaveText("Settings");
+
+    // Drill into Appearance: pane content shows, sidebar hides, header swaps.
+    await page.locator('[data-settings-nav="appearance"]').click();
+    await expect(page.locator('[data-setting="pi-web-theme"]')).toBeVisible();
+    await expect(page.locator(".settings-sidebar")).toBeHidden();
+    await expect(page.locator(".session-header-title")).toHaveText(
+      "Appearance",
+    );
+
+    // Header back returns to the list.
+    await page.locator(".session-header-back").click();
+    await expect(
+      page.locator('[data-settings-nav="appearance"]'),
+    ).toBeVisible();
+    await expect(page.locator(".settings-pane")).toBeHidden();
+    await expect(page.locator(".session-header-title")).toHaveText("Settings");
   });
 });
