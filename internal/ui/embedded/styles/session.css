@@ -1583,6 +1583,20 @@
       color: var(--body-bg);
     }
 
+    /* Set on the "Tool output" button by syncToggleButtons when tool calls are
+       hidden — its setting has no visible effect until tools are visible
+       again. opacity alone collapsed the 10px text into the surface in dark
+       themes; the explicit text-soft + dimmed background keep it readable
+       across every theme while still reading as inactive. */
+    .header-toggle-btn:disabled,
+    .header-toggle-btn:disabled:hover {
+      cursor: not-allowed;
+      color: var(--text-soft);
+      background: var(--container-bg);
+      border-color: var(--border);
+      opacity: 0.7;
+    }
+
     .model-search {
       display: block;
       width: calc(100% - 16px);
@@ -2205,6 +2219,19 @@
     .tool-execution {
       padding: var(--line-height);
       border-radius: 4px;
+    }
+
+    /* Placeholder shown in place of a tool call when the "show tool calls"
+       toggle is off — mirrors .thinking-collapsed so users still see a marker
+       instead of a stranded timestamp. */
+    .tool-call-collapsed {
+      display: none;
+      padding: var(--line-height);
+      color: var(--thinkingText);
+      font-style: italic;
+    }
+    .message-timestamp + .tool-call-collapsed {
+      padding-top: 0;
     }
 
     .tool-execution + .tool-execution {
