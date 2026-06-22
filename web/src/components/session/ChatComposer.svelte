@@ -17,8 +17,11 @@
   import ChatSelectorPopups from './chat/ChatSelectorPopups.svelte';
   import ChatToolbar from './chat/ChatToolbar.svelte';
   import ContextUsage from './chat/ContextUsage.svelte';
+  import QueuePanel from './chat/QueuePanel.svelte';
   import TextAttachmentModal from './chat/TextAttachmentModal.svelte';
   import { ChatToolbarState } from './chat/chat-toolbar-state.svelte.js';
+  import { QueueStore } from './chat/queue-store.svelte.js';
+  import { createQueueApi } from './chat/queue-api.js';
 
   let {
     sessionId = '',
@@ -31,6 +34,18 @@
   // Reactive toolbar state owned here so the live runtime can mutate it while
   // <ChatToolbar> renders from it.
   const toolbar = new ChatToolbarState();
+  // Reactive queue panel state — shared with chat-composer-runtime so its
+  // steer/queue glue mutates the same items <QueuePanel> renders. The queued
+  // items live on the server (chat_queue table); we hydrate on mount and
+  // re-fetch on SSE 'queue' events so other tabs (and the autonomous
+  // backend drainer) stay in sync.
+  const queueApi = sessionId
+    ? createQueueApi({
+        sessionId,
+        fetchImpl: typeof window !== 'undefined' ? window.fetch.bind(window) : undefined,
+      })
+    : null;
+  const queueStore = new QueueStore({ api: queueApi });
 
   // The composer runtime lives in <script module> (runChatComposer). It reads the
   // shared model + navigateTo (owned by SessionPage runtime context) at mount —
@@ -49,6 +64,10 @@
       leafId: model?.leafId || '',
       urlTargetId: model?.urlTargetId || '',
       byId: model?.byId || new Map(),
+      // Live getter: steer-queue uses this on every pi-session-reload to look
+      // for a matching user entry and clear the corresponding steer chip once
+      // pi has folded the steer into the conversation.
+      getLiveEntries: () => (model ? model.entries : []),
       navigateTo: runtime.navigateTo,
       escapeHtml: (text) => escapeHtml(text, { documentImpl: document }),
       chatApi,
@@ -57,7 +76,18 @@
       CustomEventImpl: target.CustomEvent,
       setIntervalImpl: target.setInterval.bind(target),
       toolbar,
+      queueStore,
+      queueApi,
     });
+
+    // Initial hydration from the server-side queue + subscribe to SSE 'queue'
+    // events so changes from the autonomous drainer (or another tab) show up
+    // immediately. The EventSource is shared with <LiveReload> — both attach
+    // their own listeners.
+    void queueStore.refresh?.();
+    const onQueueEvent = () => queueStore.refresh?.();
+    target.addEventListener('pi-queue-event', onQueueEvent);
+    return () => target.removeEventListener('pi-queue-event', onQueueEvent);
   });
 </script>
 
@@ -77,6 +107,7 @@
     hidden
     disabled={!chatAvailable}
   />
+  <QueuePanel store={queueStore} />
   <div class="pi-chat-shell">
     <ChatExpandButton {chatAvailable} />
     {#if cwd}<div class="pi-chat-toolbar pi-chat-cwd-bar">
