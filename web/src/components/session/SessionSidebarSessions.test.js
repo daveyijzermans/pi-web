@@ -33,14 +33,67 @@ describe('SessionSidebarSessions', () => {
       },
     });
 
-    await waitFor(() => expect(fetchSessions).toHaveBeenCalledWith({ project: '/repo/pi-web' }));
+    await waitFor(() =>
+      expect(fetchSessions).toHaveBeenCalledWith({
+        project: '/repo/pi-web',
+        limit: 20,
+        offset: 0,
+      }),
+    );
     const current = await screen.findByRole('link', { name: /Current work/ });
     expect(current).toHaveAttribute('aria-current', 'page');
     expect(screen.getByText('pi-web')).toBeInTheDocument();
     expect(screen.getByText('anthropic/sonnet')).toBeInTheDocument();
-    const spinner = container.querySelector('[data-running-spinner]');
-    expect(spinner).toBeInTheDocument();
-    expect(spinner.style.fontFamily).toContain('runcat');
+    const activeIndicator = container.querySelector('.sidebar-session-indicator');
+    expect(activeIndicator.textContent).not.toBe('');
+    expect(activeIndicator.style.fontFamily).toContain('runcat');
+    expect(activeIndicator).toHaveClass('sidebar-session-indicator--running');
+  });
+
+  it('switches the sidebar to sessions from a selected project', async () => {
+    const user = userEvent.setup();
+    const fetchSessions = vi.fn(({ project }) =>
+      Promise.resolve({
+        sessions:
+          project === '/repo/other'
+            ? [{ id: 'other.jsonl', name: 'Other project work' }]
+            : [{ id: 'current.jsonl', name: 'Current project work' }],
+      }),
+    );
+    const fetchProjects = vi.fn().mockResolvedValue({
+      projects: [
+        { path: '/repo/pi-web', sessionCount: 1 },
+        { path: '/repo/other', sessionCount: 1 },
+      ],
+    });
+
+    render(SessionSidebarSessions, {
+      props: {
+        cwd: '/repo/pi-web',
+        currentSessionId: 'current.jsonl',
+        fetchSessions,
+        fetchProjects,
+      },
+    });
+
+    await screen.findByRole('link', { name: /Current project work/ });
+    await user.click(screen.getByRole('button', { name: /Current project pi-web/ }));
+
+    expect(fetchProjects).toHaveBeenCalledOnce();
+    await user.type(screen.getByRole('searchbox', { name: 'Search projects…' }), 'other');
+    await user.click(screen.getByRole('button', { name: /other \/repo\/other/ }));
+
+    await waitFor(() =>
+      expect(fetchSessions).toHaveBeenCalledWith({
+        project: '/repo/other',
+        limit: 20,
+        offset: 0,
+      }),
+    );
+    expect(await screen.findByRole('link', { name: /Other project work/ })).toBeInTheDocument();
+    expect(screen.getByText('Browsing project')).toBeInTheDocument();
+    expect(screen.getByText('other')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Current project work/ })).not.toBeInTheDocument();
   });
 
   it('groups sessions by recency', async () => {
@@ -67,23 +120,74 @@ describe('SessionSidebarSessions', () => {
 
   it('filters the loaded project sessions by title', async () => {
     const user = userEvent.setup();
+    const fetchSessions = vi.fn(({ query }) =>
+      Promise.resolve({
+        sessions: query
+          ? [{ id: 'two.jsonl', name: 'Ship release' }]
+          : [
+              { id: 'one.jsonl', name: 'Fix sidebar' },
+              { id: 'two.jsonl', name: 'Ship release' },
+            ],
+        total: query ? 1 : 2,
+      }),
+    );
     render(SessionSidebarSessions, {
       props: {
         cwd: '/repo',
-        fetchSessions: vi.fn().mockResolvedValue({
-          sessions: [
-            { id: 'one.jsonl', name: 'Fix sidebar' },
-            { id: 'two.jsonl', name: 'Ship release' },
-          ],
-        }),
+        fetchSessions,
       },
     });
 
     await screen.findByRole('link', { name: /Fix sidebar/ });
     await user.type(screen.getByRole('searchbox', { name: 'Search project sessions…' }), 'ship');
 
+    await waitFor(() =>
+      expect(fetchSessions).toHaveBeenCalledWith({
+        project: '/repo',
+        limit: 20,
+        offset: 0,
+        query: 'ship',
+      }),
+    );
+    expect(await screen.findByRole('link', { name: /Ship release/ })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Fix sidebar/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Ship release/ })).toBeInTheDocument();
     expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+    expect(screen.getByText('1–1 / 1 sessions')).toBeInTheDocument();
+  });
+
+  it('loads one page of sessions at a time', async () => {
+    const user = userEvent.setup();
+    const fetchSessions = vi.fn(({ offset }) =>
+      Promise.resolve({
+        sessions:
+          offset === 20
+            ? [{ id: 'last.jsonl', name: 'Last session' }]
+            : Array.from({ length: 20 }, (_, index) => ({
+                id: `${index}.jsonl`,
+                name: `Session ${index + 1}`,
+              })),
+        total: 21,
+      }),
+    );
+
+    render(SessionSidebarSessions, {
+      props: {
+        cwd: '/repo',
+        fetchSessions,
+      },
+    });
+
+    expect(await screen.findByText('1–20 / 21 sessions')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Next sessions page' }));
+
+    await waitFor(() =>
+      expect(fetchSessions).toHaveBeenCalledWith({
+        project: '/repo',
+        limit: 20,
+        offset: 20,
+      }),
+    );
+    expect(await screen.findByRole('link', { name: /Last session/ })).toBeInTheDocument();
+    expect(screen.getByText('21–21 / 21 sessions')).toBeInTheDocument();
   });
 });

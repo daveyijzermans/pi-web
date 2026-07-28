@@ -1,15 +1,23 @@
 <script>
-  import { onMount } from 'svelte';
-  import { icon, FolderGit2, Search } from '../../shared/icons.js';
+  import { onMount, tick, untrack } from 'svelte';
+  import {
+    icon,
+    Check,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    FolderGit2,
+    Search,
+  } from '../../shared/icons.js';
   import { t } from '../../shared/i18n.js';
   import { handleNavClick } from '../../shared/navigation.js';
   import {
+    defaultFetchProjects,
     defaultFetchSessions,
     formatRelativeTime,
     groupSessionsByDate,
     normalizeSession,
     sessionModelLabel,
-    sessionSearchText,
     sessionsCountLabel,
   } from '../../index/sessions.js';
   import { prefetchSession } from '../../routes/session-prefetch.js';
@@ -20,26 +28,52 @@
     cwd = '',
     currentSessionId = '',
     fetchSessions = defaultFetchSessions,
+    fetchProjects = defaultFetchProjects,
     runningSessionIds = null,
   } = $props();
 
   let sessions = $state([]);
+  let totalSessions = $state(0);
+  let projectSessionCount = $state(0);
+  let currentPage = $state(0);
   let query = $state('');
   let loading = $state(true);
   let error = $state('');
   let now = $state(Date.now());
   let spinnerChar = $state('');
   let spinnerStyle = $state('');
+  let selectedProject = $state(untrack(() => cwd));
+  let projects = $state([]);
+  let projectsOpen = $state(false);
+  let projectsLoading = $state(false);
+  let projectsError = $state('');
+  let projectQuery = $state('');
+  let projectSwitcherEl = $state(null);
+  let projectSearchEl = $state(null);
+  let sessionListEl = $state(null);
+  let sessionLoadGeneration = 0;
+  let sessionSearchTimer = null;
 
-  const projectName = $derived(cwd.split(/[\\/]/).filter(Boolean).at(-1) || cwd);
-  const filteredSessions = $derived.by(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return sessions;
-    return sessions.filter((session) =>
-      sessionSearchText(session).toLowerCase().includes(normalizedQuery),
+  const pageSize = 20;
+  const activeSessionCat = getSpinnerConfig(null);
+  const activeSessionCatStyle = `font-family:${activeSessionCat.fontFamily}`;
+  const projectName = $derived(
+    selectedProject.split(/[\\/]/).filter(Boolean).at(-1) || selectedProject,
+  );
+  const filteredProjects = $derived.by(() => {
+    const normalizedQuery = projectQuery.trim().toLowerCase();
+    if (!normalizedQuery) return projects;
+    return projects.filter((project) =>
+      String(project.path || '')
+        .toLowerCase()
+        .includes(normalizedQuery),
     );
   });
-  const groupedSessions = $derived(groupSessionsByDate(filteredSessions, now));
+  const groupedSessions = $derived(groupSessionsByDate(sessions, now));
+  const pageStart = $derived(totalSessions && sessions.length ? currentPage * pageSize + 1 : 0);
+  const pageEnd = $derived(pageStart ? pageStart + sessions.length - 1 : 0);
+  const hasPreviousPage = $derived(currentPage > 0);
+  const hasNextPage = $derived((currentPage + 1) * pageSize < totalSessions);
 
   const dateBucketKeys = {
     today: 'index.dateToday',
@@ -55,6 +89,80 @@
 
   function isRunning(sessionId) {
     return !!runningSessionIds?.has(sessionId);
+  }
+
+  async function loadProjectSessions(
+    project,
+    { pageIndex = currentPage, searchQuery = query.trim() } = {},
+  ) {
+    const generation = ++sessionLoadGeneration;
+    loading = true;
+    error = '';
+    try {
+      const response = await fetchSessions({
+        project,
+        limit: pageSize,
+        offset: pageIndex * pageSize,
+        ...(searchQuery ? { query: searchQuery } : {}),
+      });
+      if (generation !== sessionLoadGeneration) return;
+      sessions = (response.sessions || []).map(normalizeSession);
+      totalSessions = response.total ?? sessions.length;
+      if (!searchQuery) projectSessionCount = totalSessions;
+      currentPage = pageIndex;
+      await tick();
+      sessionListEl?.scrollTo?.({ top: 0 });
+    } catch (err) {
+      if (generation !== sessionLoadGeneration) return;
+      sessions = [];
+      totalSessions = 0;
+      if (!searchQuery) projectSessionCount = 0;
+      error = err?.message || t('session.sessionsLoadFailed');
+    } finally {
+      if (generation === sessionLoadGeneration) loading = false;
+    }
+  }
+
+  async function openProjectSwitcher() {
+    projectsOpen = true;
+    projectsLoading = true;
+    projectsError = '';
+    projectQuery = '';
+    await tick();
+    projectSearchEl?.focus();
+    try {
+      const response = await fetchProjects();
+      projects = Array.isArray(response.projects) ? response.projects : [];
+    } catch (err) {
+      projects = [];
+      projectsError = err?.message || t('index.failedLoadProjects');
+    } finally {
+      projectsLoading = false;
+    }
+  }
+
+  function selectProject(project) {
+    projectsOpen = false;
+    if (!project || project === selectedProject) return;
+    if (sessionSearchTimer) clearTimeout(sessionSearchTimer);
+    query = '';
+    selectedProject = project;
+    loadProjectSessions(project, { pageIndex: 0, searchQuery: '' });
+  }
+
+  function onSessionSearch(event) {
+    query = event.currentTarget.value;
+    if (sessionSearchTimer) clearTimeout(sessionSearchTimer);
+    sessionSearchTimer = setTimeout(() => {
+      sessionSearchTimer = null;
+      loadProjectSessions(selectedProject, { pageIndex: 0, searchQuery: query.trim() });
+    }, 250);
+  }
+
+  function changePage(offset) {
+    const pageIndex = currentPage + offset;
+    if (pageIndex < 0 || pageIndex * pageSize >= totalSessions) return;
+    loadProjectSessions(selectedProject, { pageIndex });
   }
 
   $effect(() => {
@@ -81,32 +189,30 @@
   }
 
   onMount(() => {
-    let active = true;
     const timer = setInterval(() => {
       now = Date.now();
     }, 60000);
+    const onDocumentClick = (event) => {
+      if (projectsOpen && !projectSwitcherEl?.contains(event.target)) projectsOpen = false;
+    };
+    const onDocumentKeydown = (event) => {
+      if (event.key === 'Escape' && projectsOpen) {
+        event.preventDefault();
+        projectsOpen = false;
+      }
+    };
 
-    if (!cwd) {
-      loading = false;
-      return () => clearInterval(timer);
-    }
-
-    fetchSessions({ project: cwd })
-      .then((response) => {
-        if (!active) return;
-        sessions = (response.sessions || []).map(normalizeSession);
-      })
-      .catch((err) => {
-        if (!active) return;
-        error = err?.message || t('session.sessionsLoadFailed');
-      })
-      .finally(() => {
-        if (active) loading = false;
-      });
+    if (selectedProject) loadProjectSessions(selectedProject, { pageIndex: 0, searchQuery: '' });
+    else loading = false;
+    document.addEventListener('click', onDocumentClick);
+    document.addEventListener('keydown', onDocumentKeydown);
 
     return () => {
-      active = false;
+      sessionLoadGeneration += 1;
+      if (sessionSearchTimer) clearTimeout(sessionSearchTimer);
       clearInterval(timer);
+      document.removeEventListener('click', onDocumentClick);
+      document.removeEventListener('keydown', onDocumentKeydown);
     };
   });
 </script>
@@ -115,18 +221,88 @@
 
 <div class="sidebar-session-controls">
   {#if cwd}
-    <div class="sidebar-project" title={cwd}>
-      <span class="sidebar-project-icon">{@html icon(FolderGit2, { size: 15 })}</span>
-      <span class="sidebar-project-copy">
-        <span class="sidebar-project-label">{t('session.currentProject')}</span>
-        <span class="sidebar-project-name">{projectName}</span>
-      </span>
-      {#if !loading && !error}
-        <span
-          class="sidebar-project-count"
-          title={sessionsCountLabel(sessions.length)}
-          aria-label={sessionsCountLabel(sessions.length)}>{sessions.length}</span
+    <div class="sidebar-project-switcher" bind:this={projectSwitcherEl}>
+      <button
+        type="button"
+        class="sidebar-project"
+        title={`${t('session.switchProject')}: ${selectedProject}`}
+        aria-haspopup="dialog"
+        aria-expanded={projectsOpen}
+        aria-controls="sidebar-project-picker"
+        onclick={() => (projectsOpen ? (projectsOpen = false) : openProjectSwitcher())}
+      >
+        <span class="sidebar-project-icon">{@html icon(FolderGit2, { size: 15 })}</span>
+        <span class="sidebar-project-copy">
+          <span class="sidebar-project-label"
+            >{t(
+              selectedProject === cwd ? 'session.currentProject' : 'session.browsingProject',
+            )}</span
+          >
+          <span class="sidebar-project-name">{projectName}</span>
+        </span>
+        {#if !loading && !error}
+          <span
+            class="sidebar-project-count"
+            title={sessionsCountLabel(projectSessionCount)}
+            aria-label={sessionsCountLabel(projectSessionCount)}>{projectSessionCount}</span
+          >
+        {/if}
+        <span class="sidebar-project-chevron">{@html icon(ChevronDown, { size: 13 })}</span>
+      </button>
+
+      {#if projectsOpen}
+        <div
+          id="sidebar-project-picker"
+          class="sidebar-project-picker"
+          role="dialog"
+          aria-label={t('session.switchProject')}
         >
+          <label class="sidebar-project-search">
+            <span>{@html icon(Search, { size: 13 })}</span>
+            <input
+              type="search"
+              bind:this={projectSearchEl}
+              bind:value={projectQuery}
+              placeholder={t('index.searchProjects')}
+              aria-label={t('index.searchProjects')}
+            />
+          </label>
+          <div class="sidebar-project-options">
+            {#if projectsLoading}
+              <div class="sidebar-project-state">{t('session.loadingProjects')}</div>
+            {:else if projectsError}
+              <div class="sidebar-project-state sidebar-project-state--error">
+                {projectsError}
+              </div>
+            {:else if filteredProjects.length === 0}
+              <div class="sidebar-project-state">
+                {projectQuery.trim() ? t('index.noProjectsMatch') : t('index.noProjectsFound')}
+              </div>
+            {:else}
+              {#each filteredProjects as project (project.path)}
+                {@const name = project.path.split(/[\\/]/).filter(Boolean).at(-1) || project.path}
+                <button
+                  type="button"
+                  class="sidebar-project-option"
+                  class:active={project.path === selectedProject}
+                  title={project.path}
+                  onclick={() => selectProject(project.path)}
+                >
+                  <span class="sidebar-project-option-copy">
+                    <span class="sidebar-project-option-name">{name}</span>
+                    <span class="sidebar-project-option-path">{project.path}</span>
+                  </span>
+                  <span class="sidebar-project-option-count">{project.sessionCount || 0}</span>
+                  {#if project.path === selectedProject}
+                    <span class="sidebar-project-option-check"
+                      >{@html icon(Check, { size: 13 })}</span
+                    >
+                  {/if}
+                </button>
+              {/each}
+            {/if}
+          </div>
+        </div>
       {/if}
     </div>
   {/if}
@@ -135,21 +311,22 @@
     <input
       type="search"
       class="sidebar-search"
-      bind:value={query}
+      value={query}
+      oninput={onSessionSearch}
       placeholder={t('session.searchProjectSessions')}
       aria-label={t('session.searchProjectSessions')}
     />
   </label>
 </div>
 
-<div class="sidebar-session-list" aria-live="polite">
+<div class="sidebar-session-list" aria-live="polite" bind:this={sessionListEl}>
   {#if loading}
     <div class="sidebar-session-state">{t('index.loadingSessions')}</div>
   {:else if error}
     <div class="sidebar-session-state sidebar-session-state--error">{error}</div>
-  {:else if !cwd}
+  {:else if !selectedProject}
     <div class="sidebar-session-state">{t('session.projectUnavailable')}</div>
-  {:else if filteredSessions.length === 0}
+  {:else if sessions.length === 0}
     <div class="sidebar-session-state">
       {query.trim() ? t('session.noMatchingProjectSessions') : t('session.noProjectSessions')}
     </div>
@@ -164,7 +341,7 @@
         {/if}
         {#each group.sessions as session (session.id)}
           {@const href = `/session?id=${encodeURIComponent(session.id)}`}
-          {@const activeSession = session.id === currentSessionId}
+          {@const activeSession = selectedProject === cwd && session.id === currentSessionId}
           <a
             class="sidebar-session-row"
             class:sidebar-session-row--active={activeSession}
@@ -176,11 +353,19 @@
             onmousedown={() => startPrefetch(session.id)}
             ontouchstart={() => startPrefetch(session.id)}
           >
-            <span class="sidebar-session-indicator" aria-hidden="true"></span>
             <span class="sidebar-session-copy">
               <span class="sidebar-session-heading">
                 <span class="sidebar-session-title">{session.name || session.id}</span>
-                {#if isRunning(session.id)}
+                {#if activeSession}
+                  <span
+                    class="sidebar-session-indicator"
+                    class:sidebar-session-indicator--running={isRunning(session.id)}
+                    aria-hidden={isRunning(session.id) ? undefined : 'true'}
+                    aria-label={isRunning(session.id) ? t('index.active') : undefined}
+                    style={activeSessionCatStyle}>{activeSessionCat.frames[0]}</span
+                  >
+                {/if}
+                {#if isRunning(session.id) && !activeSession}
                   <span
                     class="sidebar-running-spinner"
                     data-running-spinner
@@ -205,4 +390,33 @@
       </section>
     {/each}
   {/if}
+</div>
+<div class="tree-status sidebar-session-status" id="sidebar-session-status">
+  <span>
+    {t('session.sessionsPageStatus', {
+      start: pageStart,
+      end: pageEnd,
+      total: totalSessions,
+    })}
+  </span>
+  <span class="sidebar-session-pagination">
+    <button
+      type="button"
+      title={t('session.previousSessionsPage')}
+      aria-label={t('session.previousSessionsPage')}
+      disabled={loading || !hasPreviousPage}
+      onclick={() => changePage(-1)}
+    >
+      {@html icon(ChevronLeft, { size: 13 })}
+    </button>
+    <button
+      type="button"
+      title={t('session.nextSessionsPage')}
+      aria-label={t('session.nextSessionsPage')}
+      disabled={loading || !hasNextPage}
+      onclick={() => changePage(1)}
+    >
+      {@html icon(ChevronRight, { size: 13 })}
+    </button>
+  </span>
 </div>
