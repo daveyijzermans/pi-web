@@ -44,6 +44,11 @@ func (s *Server) computeRunningStatus(sessionID string) bool {
 
 func (s *Server) runningStatusPayload(sessionID string, running bool) map[string]any {
 	payload := map[string]any{"id": sessionID, "running": running}
+	if s.cache != nil {
+		if project, ok := s.cache.ProjectForID(sessionID); ok && project != "" {
+			payload["project"] = project
+		}
+	}
 	if !running || s.chatSender == nil {
 		return payload
 	}

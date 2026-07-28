@@ -1698,6 +1698,197 @@
       color: var(--error);
     }
 
+    .sidebar-projects-list {
+      min-height: 0;
+      padding: 12px 10px 16px;
+      flex: 1;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+
+    .sidebar-project-load-more {
+      padding: 14px 8px 6px;
+      color: var(--muted);
+      font-size: 9.5px;
+      line-height: 14px;
+      text-align: center;
+    }
+
+    .sidebar-project-load-more--error {
+      width: 100%;
+      color: var(--error);
+      background: transparent;
+      border: 0;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .sidebar-project-load-more-retry {
+      margin-left: 5px;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .sidebar-project-load-more--error:hover .sidebar-project-load-more-retry,
+    .sidebar-project-load-more--error:focus-visible .sidebar-project-load-more-retry {
+      text-decoration: underline;
+    }
+
+    .sidebar-project-group + .sidebar-project-group {
+      margin-top: 6px;
+    }
+
+    .sidebar-project-heading {
+      width: 100%;
+      min-width: 0;
+      min-height: 34px;
+      padding: 5px 8px 5px 4px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: color-mix(in srgb, var(--text) 82%, transparent);
+      background: transparent;
+      border: 0;
+      border-radius: 5px;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition:
+        color 0.12s,
+        background 0.12s;
+    }
+
+    .sidebar-project-heading:hover {
+      color: var(--text);
+      background: var(--hover);
+    }
+
+    .sidebar-project-heading:focus-visible {
+      outline: 1px solid var(--accent);
+      outline-offset: -1px;
+    }
+
+    .sidebar-project-disclosure {
+      display: inline-flex;
+      color: color-mix(in srgb, var(--text) 46%, transparent);
+      flex-shrink: 0;
+      transition: transform 0.15s ease;
+    }
+
+    .sidebar-project-disclosure--expanded {
+      transform: rotate(90deg);
+    }
+
+    .sidebar-project-folder {
+      display: inline-flex;
+      color: color-mix(in srgb, var(--text) 68%, transparent);
+      flex-shrink: 0;
+    }
+
+    .sidebar-project-group--current .sidebar-project-folder {
+      color: var(--accent);
+    }
+
+    .sidebar-project-title {
+      min-width: 0;
+      overflow: hidden;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 18px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar-project-group--current .sidebar-project-title {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .sidebar-project-session-count {
+      min-width: 18px;
+      margin-left: auto;
+      color: color-mix(in srgb, var(--text) 46%, transparent);
+      font-size: 9.5px;
+      font-weight: 600;
+      line-height: 16px;
+      text-align: right;
+    }
+
+    .sidebar-project-running-spinner {
+      display: inline-flex;
+      min-width: 16px;
+      justify-content: flex-end;
+      color: var(--accent);
+      flex-shrink: 0;
+      font-size: 11px;
+      line-height: 16px;
+    }
+
+    .sidebar-project-sessions {
+      margin: 2px 0 4px 19px;
+    }
+
+    .sidebar-project-sessions--scrollable {
+      height: 184px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+    }
+
+    .sidebar-project-session {
+      min-width: 0;
+      min-height: 38px;
+      margin: 2px 0 0;
+      padding: 8px 9px 8px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      background: transparent;
+      border-radius: 5px;
+      text-decoration: none;
+      transition: background 0.12s;
+    }
+
+    .sidebar-project-session:hover {
+      background: var(--hover);
+    }
+
+    .sidebar-project-session--active {
+      background: color-mix(in srgb, var(--text) 6%, var(--surface));
+    }
+
+    .sidebar-project-session--active:hover {
+      background: color-mix(in srgb, var(--text) 8%, var(--surface));
+    }
+
+    .sidebar-project-session-title {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      font-size: 11.5px;
+      font-weight: 500;
+      line-height: 17px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar-project-session--active .sidebar-project-session-title {
+      font-weight: 600;
+    }
+
+    .sidebar-project-sessions-state {
+      padding: 12px 10px;
+      color: var(--muted);
+      font-size: 9.5px;
+      line-height: 14px;
+      text-align: center;
+    }
+
+    .sidebar-project-sessions-state--error {
+      color: var(--error);
+    }
+
     .sidebar-session-list {
       min-height: 0;
       padding: 7px 10px 14px;

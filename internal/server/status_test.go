@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"pi-web/internal/sessions"
 	"pi-web/internal/workers"
 )
 
@@ -65,6 +66,21 @@ func TestComputeRunningStatusEmptyID(t *testing.T) {
 	s := &Server{sessionsDir: t.TempDir(), chatSender: &fakeSender{}}
 	if s.computeRunningStatus("") {
 		t.Fatalf("empty id must be idle")
+	}
+}
+
+func TestRunningStatusPayloadIncludesCachedProject(t *testing.T) {
+	sessionsDir := t.TempDir()
+	writeSessionWithCWD(t, filepath.Join(sessionsDir, "sub"), "a.jsonl", "/repo/pi-web")
+	cache := sessions.NewCache()
+	if _, err := cache.LoadAll(sessionsDir); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{cache: cache}
+
+	payload := s.runningStatusPayload("a.jsonl", true)
+	if payload["project"] != "/repo/pi-web" {
+		t.Fatalf("project = %v, want /repo/pi-web", payload["project"])
 	}
 }
 

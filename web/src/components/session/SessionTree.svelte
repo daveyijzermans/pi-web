@@ -1,16 +1,44 @@
 <script>
-  import { icon, Clock, ListTree, PanelLeftClose, X } from '../../shared/icons.js';
+  import { icon, Clock, Folder, ListTree, PanelLeftClose, X } from '../../shared/icons.js';
   import { t } from '../../shared/i18n.js';
   import { getSessionModel } from '../../session/session-context.js';
   import { sessionRuntime } from '../../session/session-runtime.js';
   import { getSessionRuntime } from '../../session/session-runtime-context.js';
+  import SessionSidebarProjects from './SessionSidebarProjects.svelte';
   import SessionSidebarSessions from './SessionSidebarSessions.svelte';
   import SessionTreeNodes from './SessionTreeNodes.svelte';
 
-  let { cwd = '', sessionId = '', runningSessionIds = null } = $props();
+  let {
+    cwd = '',
+    sessionId = '',
+    runningSessionIds = null,
+    runningSessionProjects = null,
+  } = $props();
+
+  const SIDEBAR_TAB_KEY = 'pi-web:v1:left-sidebar-tab';
+  const SIDEBAR_TABS = ['projects', 'sessions', 'outline'];
+
+  function readInitialTab() {
+    try {
+      const stored = globalThis.localStorage?.getItem(SIDEBAR_TAB_KEY);
+      if (stored && SIDEBAR_TABS.includes(stored)) return stored;
+    } catch {}
+    return 'sessions';
+  }
 
   const model = getSessionModel();
-  let activeTab = $state('sessions');
+  const initialTab = readInitialTab();
+  let activeTab = $state(initialTab);
+  let projectsMounted = $state(initialTab === 'projects');
+
+  function activateTab(tab) {
+    if (!SIDEBAR_TABS.includes(tab)) return;
+    activeTab = tab;
+    if (tab === 'projects') projectsMounted = true;
+    try {
+      globalThis.localStorage?.setItem(SIDEBAR_TAB_KEY, tab);
+    } catch {}
+  }
 
   // Route a tree-node click through the shared navigator so message content
   // scrolls after the reactive render. Navigate to the newest leaf under the
@@ -31,11 +59,22 @@
     <button
       type="button"
       class="sidebar-tab"
+      class:active={activeTab === 'projects'}
+      role="tab"
+      aria-selected={activeTab === 'projects'}
+      aria-controls="sidebar-projects-panel"
+      onclick={() => activateTab('projects')}
+    >
+      {@html icon(Folder, { size: 13 })}<span>{t('session.projectsTab')}</span>
+    </button>
+    <button
+      type="button"
+      class="sidebar-tab"
       class:active={activeTab === 'sessions'}
       role="tab"
       aria-selected={activeTab === 'sessions'}
       aria-controls="sidebar-sessions-panel"
-      onclick={() => (activeTab = 'sessions')}
+      onclick={() => activateTab('sessions')}
     >
       {@html icon(Clock, { size: 13 })}<span>{t('session.sessionsTab')}</span>
     </button>
@@ -46,7 +85,7 @@
       role="tab"
       aria-selected={activeTab === 'outline'}
       aria-controls="sidebar-outline-panel"
-      onclick={() => (activeTab = 'outline')}
+      onclick={() => activateTab('outline')}
     >
       {@html icon(ListTree, { size: 13 })}<span>{t('session.outlineTab')}</span>
     </button>
@@ -59,6 +98,23 @@
       title={t('common.close')}
       aria-label={t('session.closeSidebar')}>{@html icon(X, { size: 14 })}</button
     >
+  </div>
+
+  <div
+    id="sidebar-projects-panel"
+    class="sidebar-panel"
+    role="tabpanel"
+    aria-label={t('session.projectsTab')}
+    hidden={activeTab !== 'projects'}
+  >
+    {#if projectsMounted}
+      <SessionSidebarProjects
+        {cwd}
+        currentSessionId={sessionId}
+        {runningSessionIds}
+        {runningSessionProjects}
+      />
+    {/if}
   </div>
 
   <div

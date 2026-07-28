@@ -48,18 +48,24 @@ describe('createStatusEvents', () => {
       'status-snapshot',
       JSON.stringify({
         running: ['a.jsonl'],
-        statuses: { 'a.jsonl': { model: 'm', modelProvider: 'p' } },
+        statuses: { 'a.jsonl': { model: 'm', modelProvider: 'p', project: '/repo' } },
       }),
     );
     es.emit(
       'status-delta',
-      JSON.stringify({ id: 'a.jsonl', running: false, model: 'm', modelProvider: 'p' }),
+      JSON.stringify({
+        id: 'a.jsonl',
+        running: false,
+        model: 'm',
+        modelProvider: 'p',
+        project: '/repo',
+      }),
     );
     es.emit('message', 'new-session');
 
     expect(onSnapshot).toHaveBeenCalledWith({
       ids: ['a.jsonl'],
-      statuses: { 'a.jsonl': { model: 'm', modelProvider: 'p' } },
+      statuses: { 'a.jsonl': { model: 'm', modelProvider: 'p', project: '/repo' } },
     });
     expect(onDelta).toHaveBeenCalledWith({
       id: 'a.jsonl',
@@ -67,6 +73,7 @@ describe('createStatusEvents', () => {
       model: 'm',
       modelName: '',
       modelProvider: 'p',
+      project: '/repo',
     });
     expect(onMessage).toHaveBeenCalledWith('new-session');
   });

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"pi-web/internal/sessions"
@@ -65,10 +66,11 @@ func (s *Server) setProjectFilterEnabled(enabled bool) {
 }
 
 type projectEntry struct {
-	Path         string `json:"path"`
-	Enabled      bool   `json:"enabled"`
-	SessionCount int    `json:"sessionCount"`
-	Source       string `json:"source"`
+	Path              string   `json:"path"`
+	Enabled           bool     `json:"enabled"`
+	SessionCount      int      `json:"sessionCount"`
+	Source            string   `json:"source"`
+	RunningSessionIDs []string `json:"runningSessionIds,omitempty"`
 }
 
 // distinctProjects returns the unique, non-empty project paths in first-seen
@@ -167,10 +169,38 @@ func (s *Server) handleApiProjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	q := r.URL.Query()
+	currentProject := q.Get("current")
+	currentSessionLimit, _ := strconv.Atoi(q.Get("sessionLimit"))
+	currentSessions := make([]sessions.SessionSummary, 0)
+	currentSessionsTotal := 0
+	if currentProject != "" && currentSessionLimit > 0 && (q.Get("offset") == "" || q.Get("offset") == "0") {
+		for _, sum := range s.filterBtwSummaries(summaries) {
+			if sum.Project != currentProject {
+				continue
+			}
+			currentSessionsTotal++
+			if len(currentSessions) < currentSessionLimit {
+				currentSessions = append(currentSessions, sum)
+			}
+		}
+	}
+
+	s.lastKnownMu.Lock()
+	runningSessionIDs := make(map[string]bool, len(s.lastKnown))
+	for id := range s.lastKnown {
+		runningSessionIDs[id] = true
+	}
+	s.lastKnownMu.Unlock()
+
 	counts := make(map[string]int)
+	runningByProject := make(map[string][]string)
 	for _, sum := range summaries {
 		if sum.Project != "" {
 			counts[sum.Project]++
+			if runningSessionIDs[sum.ID] {
+				runningByProject[sum.Project] = append(runningByProject[sum.Project], sum.ID)
+			}
 		}
 	}
 	s.syncProjectPrefs(distinctProjects(summaries))
@@ -215,23 +245,52 @@ func (s *Server) handleApiProjects(w http.ResponseWriter, r *http.Request) {
 			en = true
 		}
 		entries = append(entries, projectEntry{
-			Path:         p,
-			Enabled:      en,
-			SessionCount: counts[p],
-			Source:       src,
+			Path:              p,
+			Enabled:           en,
+			SessionCount:      counts[p],
+			Source:            src,
+			RunningSessionIDs: runningByProject[p],
 		})
 	}
 	sort.Slice(entries, func(i, j int) bool {
+		if (entries[i].Path == currentProject) != (entries[j].Path == currentProject) {
+			return entries[i].Path == currentProject
+		}
 		if entries[i].SessionCount != entries[j].SessionCount {
 			return entries[i].SessionCount > entries[j].SessionCount
 		}
 		return entries[i].Path < entries[j].Path
 	})
 
+	total := len(entries)
+	entries = paginateProjectEntries(entries, q.Get("offset"), q.Get("limit"))
+
 	writeJSON(w, 0, map[string]any{
-		"projects":      entries,
-		"filterEnabled": s.projectFilterEnabled(),
+		"projects":             entries,
+		"total":                total,
+		"currentSessions":      currentSessions,
+		"currentSessionsTotal": currentSessionsTotal,
+		"filterEnabled":        s.projectFilterEnabled(),
 	})
+}
+
+func paginateProjectEntries(entries []projectEntry, offsetStr, limitStr string) []projectEntry {
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		return entries
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+	if offset >= len(entries) {
+		return []projectEntry{}
+	}
+	end := offset + limit
+	if end > len(entries) {
+		end = len(entries)
+	}
+	return entries[offset:end]
 }
 
 func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {

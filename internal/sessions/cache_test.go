@@ -138,3 +138,22 @@ func TestSessionCacheIgnoresNonJsonl(t *testing.T) {
 		t.Fatalf("expected 0 sessions, got %d", len(got))
 	}
 }
+
+func TestSessionCacheReturnsCachedProjectForID(t *testing.T) {
+	root := t.TempDir()
+	writeSessionFile(t, root, "--tmp--project--", "session.jsonl")
+
+	c := NewCache()
+	summaries, err := c.LoadAll(root)
+	if err != nil {
+		t.Fatalf("loadAll: %v", err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("got %d sessions, want 1", len(summaries))
+	}
+
+	project, ok := c.ProjectForID("session.jsonl")
+	if !ok || project != summaries[0].Project {
+		t.Fatalf("project = %q, ok = %v; want %q, true", project, ok, summaries[0].Project)
+	}
+}

@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -245,9 +246,15 @@ func TestHandleApiProjects(t *testing.T) {
 	writeSessionWithCWD(t, filepath.Join(sessionsDir, "sub1"), "b.jsonl", "/home/user/project-a")
 	writeSessionWithCWD(t, filepath.Join(sessionsDir, "sub2"), "c.jsonl", "/home/user/project-b")
 
-	s := &Server{db: newProjectPrefsDB(t), sessionsDir: sessionsDir, cache: sessions.NewCache(), now: time.Now}
+	s := &Server{
+		db:          newProjectPrefsDB(t),
+		sessionsDir: sessionsDir,
+		cache:       sessions.NewCache(),
+		now:         time.Now,
+		lastKnown:   map[string]struct{}{"a.jsonl": {}},
+	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/projects", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/projects?current=/home/user/project-a&sessionLimit=5", nil)
 	w := httptest.NewRecorder()
 	s.handleApiProjects(w, req)
 	if w.Code != http.StatusOK {
@@ -255,10 +262,28 @@ func TestHandleApiProjects(t *testing.T) {
 	}
 
 	var payload struct {
-		Projects []projectEntry `json:"projects"`
+		Projects             []projectEntry            `json:"projects"`
+		Total                int                       `json:"total"`
+		CurrentSessions      []sessions.SessionSummary `json:"currentSessions"`
+		CurrentSessionsTotal int                       `json:"currentSessionsTotal"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
+	}
+	if payload.Total != 2 {
+		t.Fatalf("total = %d, want 2", payload.Total)
+	}
+	if len(payload.CurrentSessions) != 2 || payload.CurrentSessionsTotal != 2 {
+		t.Fatalf(
+			"current sessions = %d, total %d; want 2, 2",
+			len(payload.CurrentSessions),
+			payload.CurrentSessionsTotal,
+		)
+	}
+	for _, sum := range payload.CurrentSessions {
+		if sum.Project != "/home/user/project-a" {
+			t.Fatalf("current session project = %q", sum.Project)
+		}
 	}
 	byPath := map[string]projectEntry{}
 	for _, p := range payload.Projects {
@@ -268,9 +293,53 @@ func TestHandleApiProjects(t *testing.T) {
 	if !ok || a.SessionCount != 2 || !a.Enabled {
 		t.Fatalf("project-a entry wrong: %+v", a)
 	}
+	if len(a.RunningSessionIDs) != 1 || a.RunningSessionIDs[0] != "a.jsonl" {
+		t.Fatalf("project-a running sessions wrong: %+v", a.RunningSessionIDs)
+	}
 	b, ok := byPath["/home/user/project-b"]
 	if !ok || b.SessionCount != 1 || !b.Enabled {
 		t.Fatalf("project-b entry wrong: %+v", b)
+	}
+}
+
+func TestHandleApiProjectsPagination(t *testing.T) {
+	sessionsDir := t.TempDir()
+	for i := range 25 {
+		project := fmt.Sprintf("/home/user/project-%02d", i)
+		filename := fmt.Sprintf("%02d.jsonl", i)
+		writeSessionWithCWD(t, filepath.Join(sessionsDir, filename), filename, project)
+	}
+
+	s := &Server{db: newProjectPrefsDB(t), sessionsDir: sessionsDir, cache: sessions.NewCache(), now: time.Now}
+	getPage := func(url string) ([]projectEntry, int) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		w := httptest.NewRecorder()
+		s.handleApiProjects(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d", w.Code)
+		}
+		var payload struct {
+			Projects []projectEntry `json:"projects"`
+			Total    int            `json:"total"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		return payload.Projects, payload.Total
+	}
+
+	first, total := getPage("/api/projects?limit=20&current=/home/user/project-24")
+	if len(first) != 20 || total != 25 {
+		t.Fatalf("first page = %d projects, total %d; want 20, 25", len(first), total)
+	}
+	if first[0].Path != "/home/user/project-24" {
+		t.Fatalf("current project = %q, want first", first[0].Path)
+	}
+
+	second, total := getPage("/api/projects?limit=20&offset=20&current=/home/user/project-24")
+	if len(second) != 5 || total != 25 {
+		t.Fatalf("second page = %d projects, total %d; want 5, 25", len(second), total)
 	}
 }
 
