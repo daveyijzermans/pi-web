@@ -316,7 +316,11 @@
   onclick={openNewSessionModal}>+</button
 >
 
-<CommandPalette onNewSession={openNewSessionModal} navigate={(url) => navigate(url)} />
+<CommandPalette
+  onNewSession={openNewSessionModal}
+  {runningSessionIds}
+  navigate={(url) => navigate(url)}
+/>
 
 <SessionsList
   {sessions}

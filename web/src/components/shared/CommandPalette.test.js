@@ -49,4 +49,26 @@ describe('CommandPalette', () => {
     await openSessionPalette();
     expect(await screen.findByText('Session one')).toBeTruthy();
   });
+
+  it('shows the configured running animation beside active sessions', async () => {
+    const { container } = render(CommandPalette, {
+      props: {
+        loadSessions: async () => [{ id: 's1', name: 'Session one', model: 'm' }],
+        runningSessionIds: new Set(['s1']),
+      },
+    });
+    await openSessionPalette();
+    await screen.findByText('Session one');
+
+    const spinner = container.querySelector('[data-running-spinner]');
+    expect(spinner).toBeTruthy();
+    expect(spinner.textContent).not.toBe('');
+    expect(spinner.style.fontFamily).toContain('runcat');
+  });
+
+  it('only renders supported session actions', () => {
+    const { container } = render(CommandPalette);
+    expect(container.querySelector('[data-new-session-btn]')).toBeTruthy();
+    expect(container.querySelector('[data-import-session-btn]')).toBeNull();
+  });
 });
