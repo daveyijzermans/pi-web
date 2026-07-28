@@ -121,11 +121,12 @@ export function groupSessionsByDate(sessions = [], now = Date.now()) {
     .map((bucket) => byBucket.get(bucket));
 }
 
-export function defaultFetchSessions({ limit, offset, query } = {}) {
+export function defaultFetchSessions({ limit, offset, query, project } = {}) {
   const params = new URLSearchParams();
   if (Number.isFinite(limit) && limit > 0) params.set('limit', String(limit));
   if (Number.isFinite(offset) && offset > 0) params.set('offset', String(offset));
   if (query) params.set('q', query);
+  if (project) params.set('project', project);
   const qs = params.toString();
   return getJSON('/api/sessions' + (qs ? '?' + qs : ''));
 }

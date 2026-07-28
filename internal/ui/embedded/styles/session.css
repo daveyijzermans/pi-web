@@ -1378,6 +1378,203 @@
       box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
     }
 
+    .sidebar-tabbar {
+      min-height: 44px;
+      padding: 7px 8px;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      flex-shrink: 0;
+      background: var(--chrome-bg);
+      border-bottom: 1px solid var(--dim);
+    }
+
+    .sidebar-tab {
+      min-width: 0;
+      height: 29px;
+      padding: 0 9px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      font: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      transition: color 0.12s, background 0.12s, border-color 0.12s;
+    }
+
+    .sidebar-tab:hover {
+      color: var(--text);
+      background: var(--hover);
+    }
+
+    .sidebar-tab.active {
+      color: var(--text);
+      background: var(--selectedBg);
+      border-color: var(--dim);
+    }
+
+    .sidebar-tab:focus-visible,
+    .sidebar-session-row:focus-visible {
+      outline: 1px solid var(--accent);
+      outline-offset: -1px;
+    }
+
+    .sidebar-tabbar-spacer {
+      flex: 1;
+    }
+
+    .sidebar-panel {
+      min-height: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-panel[hidden] {
+      display: none;
+    }
+
+    .sidebar-session-controls {
+      padding: 12px;
+      flex-shrink: 0;
+      background: var(--chrome-bg);
+      border-bottom: 1px solid var(--dim);
+    }
+
+    .sidebar-project {
+      min-width: 0;
+      margin-top: 9px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .sidebar-project-icon {
+      display: inline-flex;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .sidebar-project-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar-project-count {
+      min-width: 18px;
+      margin-left: auto;
+      padding: 0 5px;
+      color: var(--text-soft);
+      background: var(--surface-2);
+      border: 1px solid var(--dim-2);
+      border-radius: 999px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .sidebar-session-list {
+      min-height: 0;
+      padding: 6px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .sidebar-session-row {
+      position: relative;
+      min-width: 0;
+      padding: 9px 10px 9px 13px;
+      display: flex;
+      align-items: stretch;
+      color: var(--text);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      text-decoration: none;
+      transition: background 0.12s, border-color 0.12s;
+    }
+
+    .sidebar-session-row:hover {
+      background: var(--hover);
+      border-color: var(--dim-2);
+    }
+
+    .sidebar-session-row--active {
+      background: color-mix(in srgb, var(--accent) 9%, transparent);
+      border-color: color-mix(in srgb, var(--accent) 28%, var(--dim));
+    }
+
+    .sidebar-session-indicator {
+      position: absolute;
+      top: 9px;
+      bottom: 9px;
+      left: 4px;
+      width: 2px;
+      background: transparent;
+      border-radius: 999px;
+    }
+
+    .sidebar-session-row--active .sidebar-session-indicator {
+      background: var(--accent);
+    }
+
+    .sidebar-session-copy {
+      min-width: 0;
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .sidebar-session-title {
+      overflow: hidden;
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 15px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar-session-row--active .sidebar-session-title {
+      color: var(--accent);
+    }
+
+    .sidebar-session-meta {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 9px;
+      line-height: 13px;
+    }
+
+    .sidebar-session-model {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar-session-state {
+      padding: 28px 14px;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 16px;
+      text-align: center;
+    }
+
+    .sidebar-session-state--error {
+      color: var(--error);
+    }
+
     .sidebar-header {
       padding: 8px 12px;
       flex-shrink: 0;
