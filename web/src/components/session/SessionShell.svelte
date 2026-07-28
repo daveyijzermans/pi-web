@@ -25,7 +25,9 @@
   } from '../../session/session-modals.svelte.js';
   import { getSessionRuntime } from '../../session/session-runtime-context.js';
   import { onMount } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import { createAnnotationApi } from '../../session/annotations/annotation-api.js';
+  import { createStatusEvents } from '../../shared/status-events.js';
   import { sessionRuntime } from '../../session/session-runtime.js';
 
   let {
@@ -42,6 +44,7 @@
   } = $props();
 
   const runtime = getSessionRuntime();
+  const runningSessionIds = new SvelteSet();
 
   // Annotation config, supplied as props to <AnnotationLayer> (via <RightSidebar>)
   // instead of the former imperative init() up-call. The DOM anchors are resolved
@@ -75,6 +78,21 @@
       if (sessionRuntime.layout?.isMobileLayout?.()) sessionRuntime.rightSidebar?.collapse();
     },
     resolveArtifact: (artifactId) => sessionRuntime.artifacts?.getArtifact(artifactId) || null,
+  });
+
+  onMount(() => {
+    const statusEvents = createStatusEvents({
+      onSnapshot: ({ ids }) => {
+        runningSessionIds.clear();
+        for (const id of ids) runningSessionIds.add(id);
+      },
+      onDelta: ({ id, running }) => {
+        if (running) runningSessionIds.add(id);
+        else runningSessionIds.delete(id);
+      },
+    });
+    statusEvents.connect();
+    return () => statusEvents.cleanup();
   });
 
   onMount(() => {
@@ -116,7 +134,7 @@
 
 <SessionHeader {title} {cwd} {sessionId} />
 
-<CommandMenu {sessionId} />
+<CommandMenu {sessionId} {runningSessionIds} />
 
 <!-- Live reload (SSE) mounts before <ChatComposer> so its optimistic
      "message sent" listener is attached before the user can send. -->
@@ -124,7 +142,7 @@
 
 <div id="sidebar-overlay"></div>
 <div id="app">
-  <SessionTree {cwd} {sessionId} />
+  <SessionTree {cwd} {sessionId} {runningSessionIds} />
   <div id="content-container" class="content-container">
     <main id="content">
       <div id="header-container"><SessionInfoHeader model={sessionModel} /></div>

@@ -1379,11 +1379,11 @@
     }
 
     .sidebar-tabbar {
-      min-height: 44px;
-      padding: 7px 8px;
+      min-height: 48px;
+      padding: 8px 10px;
       display: flex;
       align-items: center;
-      gap: 3px;
+      gap: 4px;
       flex-shrink: 0;
       background: var(--chrome-bg);
       border-bottom: 1px solid var(--dim);
@@ -1391,8 +1391,8 @@
 
     .sidebar-tab {
       min-width: 0;
-      height: 29px;
-      padding: 0 9px;
+      height: 31px;
+      padding: 0 10px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -1400,7 +1400,7 @@
       color: var(--muted);
       background: transparent;
       border: 1px solid transparent;
-      border-radius: 4px;
+      border-radius: 6px;
       font: inherit;
       font-size: 11px;
       cursor: pointer;
@@ -1414,8 +1414,12 @@
 
     .sidebar-tab.active {
       color: var(--text);
-      background: var(--selectedBg);
-      border-color: var(--dim);
+      background: color-mix(in srgb, var(--accent) 8%, var(--selectedBg));
+      border-color: color-mix(in srgb, var(--accent) 24%, var(--dim));
+    }
+
+    .sidebar-tab.active svg {
+      color: var(--accent);
     }
 
     .sidebar-tab:focus-visible,
@@ -1448,80 +1452,154 @@
 
     .sidebar-project {
       min-width: 0;
-      margin-top: 9px;
       display: flex;
       align-items: center;
-      gap: 6px;
-      color: var(--muted);
-      font-size: 10px;
+      gap: 9px;
     }
 
     .sidebar-project-icon {
+      width: 30px;
+      height: 30px;
       display: inline-flex;
+      align-items: center;
+      justify-content: center;
       color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--dim));
+      border-radius: 7px;
       flex-shrink: 0;
+    }
+
+    .sidebar-project-copy {
+      min-width: 0;
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+    }
+
+    .sidebar-project-label {
+      color: var(--muted);
+      font-size: 8px;
+      line-height: 11px;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
     }
 
     .sidebar-project-name {
       overflow: hidden;
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 15px;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     .sidebar-project-count {
-      min-width: 18px;
+      min-width: 25px;
+      height: 22px;
       margin-left: auto;
-      padding: 0 5px;
+      padding: 0 7px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       color: var(--text-soft);
       background: var(--surface-2);
       border: 1px solid var(--dim-2);
       border-radius: 999px;
-      text-align: center;
+      font-size: 9px;
+      line-height: 1;
       flex-shrink: 0;
     }
 
     .sidebar-session-list {
       min-height: 0;
-      padding: 6px;
+      padding: 2px 8px 10px;
       flex: 1;
       overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+
+    .sidebar-session-group + .sidebar-session-group {
+      margin-top: 2px;
+    }
+
+    .sidebar-session-group-heading {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      min-height: 29px;
+      padding: 10px 8px 5px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--muted);
+      background: var(--chrome-bg);
+      font-size: 8px;
+      font-weight: 600;
+      line-height: 13px;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .sidebar-session-group-count {
+      color: color-mix(in srgb, var(--muted) 75%, transparent);
+      font-variant-numeric: tabular-nums;
     }
 
     .sidebar-session-row {
       position: relative;
       min-width: 0;
-      padding: 9px 10px 9px 13px;
+      margin: 4px 0;
+      padding: 9px 10px 9px 14px;
       display: flex;
       align-items: stretch;
       color: var(--text);
-      border: 1px solid transparent;
-      border-radius: 4px;
+      background: color-mix(in srgb, var(--surface) 48%, transparent);
+      border: 1px solid color-mix(in srgb, var(--dim-2) 72%, transparent);
+      border-radius: 7px;
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 2.5%, transparent);
       text-decoration: none;
-      transition: background 0.12s, border-color 0.12s;
+      transition: background 0.14s, border-color 0.14s, box-shadow 0.14s;
     }
 
     .sidebar-session-row:hover {
-      background: var(--hover);
-      border-color: var(--dim-2);
+      background: color-mix(in srgb, var(--surface-2) 78%, var(--surface));
+      border-color: color-mix(in srgb, var(--muted) 28%, var(--dim));
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent),
+        0 3px 10px color-mix(in srgb, var(--body-bg) 42%, transparent);
+    }
+
+    .sidebar-session-row--running {
+      background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+      border-color: color-mix(in srgb, var(--accent) 22%, var(--dim));
     }
 
     .sidebar-session-row--active {
-      background: color-mix(in srgb, var(--accent) 9%, transparent);
-      border-color: color-mix(in srgb, var(--accent) 28%, var(--dim));
+      background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+      border-color: color-mix(in srgb, var(--accent) 42%, var(--dim));
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent) 12%, transparent),
+        0 3px 12px color-mix(in srgb, var(--accent) 7%, transparent);
+    }
+
+    .sidebar-session-row--active:hover {
+      background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+      border-color: color-mix(in srgb, var(--accent) 52%, var(--dim));
     }
 
     .sidebar-session-indicator {
       position: absolute;
-      top: 9px;
-      bottom: 9px;
+      top: 8px;
+      bottom: 8px;
       left: 4px;
-      width: 2px;
+      width: 3px;
       background: transparent;
       border-radius: 999px;
     }
 
     .sidebar-session-row--active .sidebar-session-indicator {
       background: var(--accent);
+      box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 35%, transparent);
     }
 
     .sidebar-session-copy {
@@ -1529,28 +1607,50 @@
       display: flex;
       flex: 1;
       flex-direction: column;
-      gap: 2px;
+      gap: 3px;
+    }
+
+    .sidebar-session-heading {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     .sidebar-session-title {
+      min-width: 0;
+      flex: 1;
       overflow: hidden;
       color: var(--text);
       font-size: 11px;
       font-weight: 500;
-      line-height: 15px;
+      line-height: 16px;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
+    .sidebar-running-spinner {
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+      font-size: 13px;
+      line-height: 1;
+      text-align: center;
+      filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 35%, transparent));
+      flex-shrink: 0;
+    }
+
     .sidebar-session-row--active .sidebar-session-title {
       color: var(--accent);
+      font-weight: 600;
     }
 
     .sidebar-session-meta {
       min-width: 0;
       display: flex;
       align-items: center;
-      gap: 7px;
       color: var(--muted);
       font-size: 9px;
       line-height: 13px;
@@ -1558,7 +1658,10 @@
 
     .sidebar-session-model {
       min-width: 0;
+      margin-left: 7px;
+      padding-left: 7px;
       overflow: hidden;
+      border-left: 1px solid var(--dim-2);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -1599,6 +1702,45 @@
       color: var(--text);
       border: 1px solid var(--dim);
       border-radius: 3px;
+    }
+
+    .sidebar-search-shell {
+      min-width: 0;
+      height: 32px;
+      margin-top: 11px;
+      padding: 0 9px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      background: var(--input-bg);
+      border: 1px solid var(--dim);
+      border-radius: 6px;
+      transition: border-color 0.12s, box-shadow 0.12s, color 0.12s;
+    }
+
+    .sidebar-search-shell:focus-within {
+      color: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 10%, transparent);
+    }
+
+    .sidebar-search-icon {
+      display: inline-flex;
+      flex-shrink: 0;
+    }
+
+    .sidebar-search-shell .sidebar-search {
+      min-width: 0;
+      height: 30px;
+      padding: 0;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+    }
+
+    .sidebar-search-shell .sidebar-search:focus {
+      border-color: transparent;
     }
 
     .sidebar-filters {

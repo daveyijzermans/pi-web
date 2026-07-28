@@ -166,6 +166,7 @@ export default {
   'session.sessionsTab': 'Sessions',
   'session.outlineTab': 'Outline',
   'session.searchProjectSessions': 'Search project sessions…',
+  'session.currentProject': 'Current project',
   'session.searchOutline': 'Search outline…',
   'session.sessionsLoadFailed': 'Failed to load sessions',
   'session.projectUnavailable': 'This session has no project directory.',

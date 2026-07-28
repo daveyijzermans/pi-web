@@ -24,11 +24,12 @@ describe('SessionSidebarSessions', () => {
       ],
     });
 
-    render(SessionSidebarSessions, {
+    const { container } = render(SessionSidebarSessions, {
       props: {
         cwd: '/repo/pi-web',
         currentSessionId: 'current.jsonl',
         fetchSessions,
+        runningSessionIds: new Set(['current.jsonl']),
       },
     });
 
@@ -37,6 +38,31 @@ describe('SessionSidebarSessions', () => {
     expect(current).toHaveAttribute('aria-current', 'page');
     expect(screen.getByText('pi-web')).toBeInTheDocument();
     expect(screen.getByText('anthropic/sonnet')).toBeInTheDocument();
+    const spinner = container.querySelector('[data-running-spinner]');
+    expect(spinner).toBeInTheDocument();
+    expect(spinner.style.fontFamily).toContain('runcat');
+  });
+
+  it('groups sessions by recency', async () => {
+    const now = Date.now();
+    render(SessionSidebarSessions, {
+      props: {
+        cwd: '/repo',
+        fetchSessions: vi.fn().mockResolvedValue({
+          sessions: [
+            { id: 'today.jsonl', name: 'Work today', lastActivity: new Date(now).toISOString() },
+            {
+              id: 'older.jsonl',
+              name: 'Older work',
+              lastActivity: new Date(now - 40 * 86400000).toISOString(),
+            },
+          ],
+        }),
+      },
+    });
+
+    expect(await screen.findByRole('heading', { name: /Today/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Older/ })).toBeInTheDocument();
   });
 
   it('filters the loaded project sessions by title', async () => {
@@ -58,5 +84,6 @@ describe('SessionSidebarSessions', () => {
 
     expect(screen.queryByRole('link', { name: /Fix sidebar/ })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Ship release/ })).toBeInTheDocument();
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
   });
 });

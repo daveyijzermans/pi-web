@@ -37,7 +37,7 @@
     renameSession,
   } from '../../session/session-menu-actions.js';
 
-  let { sessionId = '' } = $props();
+  let { sessionId = '', runningSessionIds = null } = $props();
 
   // Close animations must outlast the matching CSS transitions before the panel
   // is display:none'd (see command-menu styles).
@@ -326,4 +326,4 @@
   </div>
 </div>
 
-<CommandPalette />
+<CommandPalette {runningSessionIds} />

@@ -7,7 +7,7 @@
   import SessionSidebarSessions from './SessionSidebarSessions.svelte';
   import SessionTreeNodes from './SessionTreeNodes.svelte';
 
-  let { cwd = '', sessionId = '' } = $props();
+  let { cwd = '', sessionId = '', runningSessionIds = null } = $props();
 
   const model = getSessionModel();
   let activeTab = $state('sessions');
@@ -68,7 +68,7 @@
     aria-label={t('session.sessionsTab')}
     hidden={activeTab !== 'sessions'}
   >
-    <SessionSidebarSessions {cwd} currentSessionId={sessionId} />
+    <SessionSidebarSessions {cwd} currentSessionId={sessionId} {runningSessionIds} />
   </div>
 
   <div
