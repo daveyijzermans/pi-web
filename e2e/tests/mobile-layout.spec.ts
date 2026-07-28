@@ -1,4 +1,10 @@
-import { test, expect, isMobileLayout, collapseScratchpad } from "../lib/test";
+import {
+  test,
+  expect,
+  isMobileLayout,
+  collapseScratchpad,
+  openSessionOutline,
+} from "../lib/test";
 import type { Page } from "@playwright/test";
 
 // Layout is driven by the 900px breakpoint, not by device type: iPad portrait
@@ -37,6 +43,7 @@ test.describe("responsive layout", () => {
     await treeToggle.dispatchEvent("click");
     await expect(body).toHaveClass(/sidebar-open/);
     await expect(page.locator("#sidebar")).toHaveClass(/open/);
+    await openSessionOutline(page);
 
     // Selecting a node navigates AND collapses the drawer.
     await page.locator("#tree-container .tree-node").first().click();

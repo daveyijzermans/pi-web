@@ -1,4 +1,9 @@
-import { expect, test, isMobileLayout } from "../lib/test";
+import {
+  expect,
+  test,
+  isMobileLayout,
+  openSessionOutline,
+} from "../lib/test";
 import { buildSession, uniqueSessionName, writeSession } from "../lib/sessions";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -14,6 +19,7 @@ test.describe("session labels", () => {
 
     await page.goto(`/session?id=${encodeURIComponent(id)}`);
     await expect(page.locator(`#entry-${lastId}`)).toBeVisible();
+    await openSessionOutline(page);
 
     await page.locator(`#entry-${lastId} .label-btn`).click({ force: true });
     await page.locator('#label-modal-input').fill('Review checkpoint');
@@ -54,6 +60,7 @@ test.describe("session labels", () => {
     const id = writeSession(sessionsDir, name, entries);
 
     await page.goto(`/session?id=${encodeURIComponent(id)}`);
+    await openSessionOutline(page);
     await expect(page.locator("#tree-container .tree-label", { hasText: "[Old label]" })).toBeVisible();
     await page.locator(`#entry-${lastId} .label-btn`).click({ force: true });
     await expect(page.locator('.label-modal-remove')).toBeVisible();
