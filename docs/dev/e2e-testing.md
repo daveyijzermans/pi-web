@@ -81,19 +81,19 @@ apply. iPad portrait exercises mobile, iPad landscape exercises desktop.
 
 ### Expected skips
 
-A full run reports **13 skipped** — these are intentional `test.skip()` guards,
-not failures:
+Some tests intentionally use `test.skip()` guards rather than running redundant
+or conflicting cases across every project:
 
-- **7** from `mobile-layout.spec.ts`: it has a mobile test and a desktop test;
-  each skips on the projects whose layout doesn't apply (mobile test skips the 4
-  desktop-layout projects, desktop test skips the 3 mobile-layout projects).
-- **6** from `settings.spec.ts` → "persists a setting server-side across
-  reload": settings live in one global server-side store, so running it on all 7
-  projects in parallel would race on the same key. It's gated to Desktop Chrome
-  (persistence is browser-independent), so the other 6 projects skip it.
+- `mobile-layout.spec.ts` selects the mobile or desktop case for each project's
+  active breakpoint.
+- The server-side persistence case in `settings.spec.ts` runs only on Desktop
+  Chrome because all projects share one global settings store.
+- `session-sidebar.spec.ts` runs its card-style and running-status coverage only
+  on Desktop Chrome; those behaviors are viewport-agnostic, while mobile drawer
+  behavior is already covered by `mobile-layout.spec.ts`.
 
-So `92 passed + 13 skipped + 0 failed` is the healthy state. Each skip carries a
-reason string, visible with `npx playwright test --reporter=list`.
+Each intentional skip carries a reason string, visible with
+`npx playwright test --reporter=list`. Any failure remains unexpected.
 
 ## How the server runs (scripted launch)
 
