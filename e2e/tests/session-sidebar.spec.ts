@@ -7,13 +7,13 @@ import {
 } from "../lib/sessions";
 
 test.describe("session sidebar", () => {
-  test("renders surfaced cards and marks a running session with runcat", async ({
+  test("highlights the active session and marks a running session with runcat", async ({
     page,
     sessionsDir,
   }, testInfo) => {
     test.skip(
       testInfo.project.name !== "Desktop Chrome",
-      "card styling and running status are viewport-agnostic; run once",
+      "active styling and running status are viewport-agnostic; run once",
     );
 
     const cwd = realWorkingDir();
@@ -47,22 +47,13 @@ test.describe("session sidebar", () => {
     await expect(activeCard).toBeVisible();
     await expect(idleCard).toBeVisible();
     await expect(activeCard).toHaveAttribute("aria-current", "page");
-    await expect(activeCard).toHaveCSS("border-radius", "7px");
-    await expect(idleCard).toHaveCSS("border-radius", "7px");
 
-    const [activeStyle, idleStyle] = await Promise.all([
-      activeCard.evaluate((element) => {
-        const style = getComputedStyle(element);
-        return { background: style.backgroundColor, border: style.borderColor };
-      }),
-      idleCard.evaluate((element) => {
-        const style = getComputedStyle(element);
-        return { background: style.backgroundColor, border: style.borderColor };
-      }),
+    const [activeBackground, idleBackground] = await Promise.all([
+      activeCard.evaluate((element) => getComputedStyle(element).backgroundColor),
+      idleCard.evaluate((element) => getComputedStyle(element).backgroundColor),
     ]);
-    expect(activeStyle.background).not.toBe(idleStyle.background);
-    expect(activeStyle.border).not.toBe(idleStyle.border);
-    expect(idleStyle.background).not.toBe("rgba(0, 0, 0, 0)");
+    expect(activeBackground).not.toBe(idleBackground);
+    expect(activeBackground).not.toBe("rgba(0, 0, 0, 0)");
 
     await page
       .locator("#pi-chat-message")
@@ -72,9 +63,10 @@ test.describe("session sidebar", () => {
     await expect(activeCard).toHaveClass(/sidebar-session-row--running/, {
       timeout: 20000,
     });
-    const spinner = activeCard.locator("[data-running-spinner]");
-    await expect(spinner).toBeVisible();
-    await expect(spinner).toHaveCSS("font-family", /runcat/);
-    await expect(spinner).not.toHaveText("");
+    const indicator = activeCard.locator(".sidebar-session-indicator");
+    await expect(indicator).toBeVisible();
+    await expect(indicator).toHaveClass(/sidebar-session-indicator--running/);
+    await expect(indicator).toHaveCSS("font-family", /runcat/);
+    await expect(indicator).not.toHaveText("");
   });
 });

@@ -88,9 +88,9 @@ or conflicting cases across every project:
   active breakpoint.
 - The server-side persistence case in `settings.spec.ts` runs only on Desktop
   Chrome because all projects share one global settings store.
-- `session-sidebar.spec.ts` runs its card-style and running-status coverage only
-  on Desktop Chrome; those behaviors are viewport-agnostic, while mobile drawer
-  behavior is already covered by `mobile-layout.spec.ts`.
+- `session-sidebar.spec.ts` runs its active-session and running-status coverage
+  only on Desktop Chrome; those behaviors are viewport-agnostic, while mobile
+  drawer behavior is already covered by `mobile-layout.spec.ts`.
 
 Each intentional skip carries a reason string, visible with
 `npx playwright test --reporter=list`. Any failure remains unexpected.
