@@ -53,7 +53,6 @@ export default {
     'Enable projects from the menu (⋯ → Manage Projects) to see their sessions.',
   'index.noSessionsYet': 'No sessions yet',
   'index.noSessionsYetHint': 'Start a new session to begin.',
-  'index.importSession': 'Import session',
   'index.sessionLayout': 'Session layout',
   'index.closeNewSession': 'Close Start a new session',
   'index.closeManageProjects': 'Close Manage projects',

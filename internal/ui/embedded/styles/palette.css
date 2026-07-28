@@ -94,12 +94,26 @@ body.pi-palette-open { overflow: hidden; }
     outline: none;
     transform: translateX(3px);
 }
+.palette-result-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
 .palette-result-title {
     display: block;
+    min-width: 0;
+    flex: 1;
     color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+.palette-running-spinner {
+    display: inline-block;
+    flex-shrink: 0;
+    color: var(--accent);
+    text-align: center;
 }
 .palette-result-meta {
     display: block;
