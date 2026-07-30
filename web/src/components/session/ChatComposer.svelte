@@ -8,7 +8,7 @@
 </script>
 
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { escapeHtml } from '../../session/render/session-format.js';
   import { getSessionRuntime } from '../../session/session-runtime-context.js';
   import * as chatApi from '../../session/chat/chat-api.js';
@@ -39,12 +39,14 @@
   // items live on the server (chat_queue table); we hydrate on mount and
   // re-fetch on SSE 'queue' events so other tabs (and the autonomous
   // backend drainer) stay in sync.
-  const queueApi = sessionId
-    ? createQueueApi({
-        sessionId,
-        fetchImpl: typeof window !== 'undefined' ? window.fetch.bind(window) : undefined,
-      })
-    : null;
+  const queueApi = untrack(() =>
+    sessionId
+      ? createQueueApi({
+          sessionId,
+          fetchImpl: typeof window !== 'undefined' ? window.fetch.bind(window) : undefined,
+        })
+      : null,
+  );
   const queueStore = new QueueStore({ api: queueApi });
 
   // The composer runtime lives in <script module> (runChatComposer). It reads the
