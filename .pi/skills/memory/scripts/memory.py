@@ -37,11 +37,19 @@ def _init_schema(c):
     c.executescript(SCHEMA.read_text())
 
 
+class ClosingConnection(sqlite3.Connection):
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            return super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
+
+
 def conn(auto_init=True):
     db_path = get_db_path()
     if db_path != Path(":memory:"):
         db_path.parent.mkdir(parents=True, exist_ok=True)
-    c = sqlite3.connect(str(db_path))
+    c = sqlite3.connect(str(db_path), factory=ClosingConnection)
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA foreign_keys = ON")
     if auto_init and _schema_missing(c):
