@@ -2,7 +2,6 @@ package server
 
 import (
 	"database/sql"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -90,8 +89,7 @@ func (s *Server) handleApiSchedules(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 0, map[string]any{"schedules": out})
 	case http.MethodPost:
 		var in scheduleInput
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			writeJSONError(w, http.StatusBadRequest, "invalid json body")
+		if !decodeJSONBody(w, r, &in) {
 			return
 		}
 		if msg, ok := in.validate(); !ok {
@@ -139,8 +137,7 @@ func (s *Server) handleApiSchedule(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 0, map[string]any{"schedule": s.withNextRun(existing)})
 	case http.MethodPost, http.MethodPut:
 		var in scheduleInput
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			writeJSONError(w, http.StatusBadRequest, "invalid json body")
+		if !decodeJSONBody(w, r, &in) {
 			return
 		}
 		if msg, ok := in.validate(); !ok {

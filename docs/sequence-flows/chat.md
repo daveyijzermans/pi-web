@@ -136,6 +136,11 @@ Content-Type: image/png
 
 ### 3. Worker Resolution
 
+After parsing succeeds, the server registers the send as server-owned
+background work and immediately returns `202 Accepted`. The task uses the
+server lifecycle context: graceful shutdown cancels an in-flight RPC wait and
+waits for the task to exit before closing shared resources.
+
 `workers.Manager.workerFor(sessionID, sessionPath)`:
 
 ```

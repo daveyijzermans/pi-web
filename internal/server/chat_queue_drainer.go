@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -151,15 +152,15 @@ func (d *queueDrainer) drainSession(sessionID string) {
 		return
 	}
 	req := chat.Request{Message: item.Message}
-	ctx, cancel := context.WithTimeout(context.Background(), d.dispatchTimeout)
-	go func() {
+	d.server.startTask(func(taskCtx context.Context) {
+		ctx, cancel := context.WithTimeout(taskCtx, d.dispatchTimeout)
 		defer cancel()
-		if err := d.server.chatSender.Send(ctx, sessionID, resolved.Path, req); err != nil {
+		if err := d.server.chatSender.Send(ctx, sessionID, resolved.Path, req); err != nil && !errors.Is(err, context.Canceled) {
 			fmt.Fprintf(os.Stderr,
 				"queue drainer: Send %s position %d failed: %v\n",
 				sessionID, item.Position, err)
 		}
-	}()
+	})
 	if msg, err := formatSSEJSONEvent("queue", map[string]any{"sessionId": sessionID}); err == nil {
 		d.server.broadcast(sessionID, msg)
 	}

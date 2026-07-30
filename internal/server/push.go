@@ -19,13 +19,13 @@ import (
 // subscriptions. Subscriptions are persisted as JSON on disk so they
 // survive restarts; one file under ~/.pi/agent/web/.
 type PushManager struct {
-	mu        sync.Mutex
-	publicKey string
+	mu         sync.Mutex
+	publicKey  string
 	privateKey string
-	subject   string
-	storeDir  string
-	subs      map[string]pushSub
-	client    *http.Client
+	subject    string
+	storeDir   string
+	subs       map[string]pushSub
+	client     *http.Client
 }
 
 type pushSub struct {
@@ -147,8 +147,11 @@ func (m *PushManager) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var sub pushSub
-	if err := json.NewDecoder(r.Body).Decode(&sub); err != nil || sub.Endpoint == "" {
-		http.Error(w, "invalid subscription", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &sub) {
+		return
+	}
+	if sub.Endpoint == "" {
+		writeJSONError(w, http.StatusBadRequest, "invalid subscription")
 		return
 	}
 	m.mu.Lock()
@@ -166,8 +169,11 @@ func (m *PushManager) handleUnsubscribe(w http.ResponseWriter, r *http.Request) 
 	var body struct {
 		Endpoint string `json:"endpoint"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Endpoint == "" {
-		http.Error(w, "invalid endpoint", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	if body.Endpoint == "" {
+		writeJSONError(w, http.StatusBadRequest, "invalid endpoint")
 		return
 	}
 	m.mu.Lock()

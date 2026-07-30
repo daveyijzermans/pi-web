@@ -78,8 +78,7 @@ func (s *Server) handleApiForkSession(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		EntryID string `json:"entryId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	if body.EntryID == "" {
@@ -100,7 +99,9 @@ func (s *Server) handleApiForkSession(w http.ResponseWriter, r *http.Request) {
 
 	if s.chatSender != nil {
 		if resolved, err := sessions.ResolveByID(s.sessionsDir, id); err == nil {
-			go s.initializeNewSessionWorker(context.Background(), resolved.Session.ID, resolved.Path, sessions.InitialSettings{})
+			s.startTask(func(ctx context.Context) {
+				s.initializeNewSessionWorker(ctx, resolved.Session.ID, resolved.Path, sessions.InitialSettings{})
+			})
 		}
 	}
 
@@ -115,8 +116,7 @@ func (s *Server) handleApiCloneSession(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		LeafID string `json:"leafId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 
@@ -148,7 +148,9 @@ func (s *Server) handleApiCloneSession(w http.ResponseWriter, r *http.Request) {
 
 	if s.chatSender != nil {
 		if resolved, err := sessions.ResolveByID(s.sessionsDir, id); err == nil {
-			go s.initializeNewSessionWorker(context.Background(), resolved.Session.ID, resolved.Path, sessions.InitialSettings{})
+			s.startTask(func(ctx context.Context) {
+				s.initializeNewSessionWorker(ctx, resolved.Session.ID, resolved.Path, sessions.InitialSettings{})
+			})
 		}
 	}
 
@@ -339,8 +341,7 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 		Path            string `json:"path"`
 		SourceSessionID string `json:"sourceSessionId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	if body.Path == "" {
@@ -361,7 +362,9 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 	// current model and thinking level onto the new worker.
 	if s.chatSender != nil {
 		if resolved, err := sessions.ResolveByID(s.sessionsDir, id); err == nil {
-			go s.initializeNewSessionWorker(context.Background(), resolved.Session.ID, resolved.Path, settings)
+			s.startTask(func(ctx context.Context) {
+				s.initializeNewSessionWorker(ctx, resolved.Session.ID, resolved.Path, settings)
+			})
 		}
 	}
 
@@ -376,8 +379,7 @@ func (s *Server) handleRenameSession(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name string `json:"name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	name := strings.TrimSpace(body.Name)
@@ -424,8 +426,7 @@ func (s *Server) handleLabelSessionEntry(w http.ResponseWriter, r *http.Request)
 		EntryID string `json:"entryId"`
 		Label   string `json:"label"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	entryID := strings.TrimSpace(body.EntryID)

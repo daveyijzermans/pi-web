@@ -3,7 +3,6 @@ package server
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -166,8 +165,7 @@ func (s *Server) handleCreateReviewComment(w http.ResponseWriter, r *http.Reques
 	}
 
 	var c reviewComment
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &c) {
 		return
 	}
 	if c.File == "" {

@@ -82,11 +82,11 @@ func (s *Server) evaluateSchedules(state map[string]scheduleState) {
 			continue
 		}
 		sc := sc
-		go func() {
-			if _, err := s.fireSchedule(sc); err != nil {
+		s.startTask(func(ctx context.Context) {
+			if _, err := s.fireScheduleContext(ctx, sc); err != nil && !errors.Is(err, context.Canceled) {
 				fmt.Fprintf(os.Stderr, "scheduler: fire %q: %v\n", sc.Name, err)
 			}
-		}()
+		})
 		next, err := schedules.NextFire(sc.CronExpr, sc.Timezone, now)
 		if err != nil {
 			delete(state, sc.ID)
@@ -114,6 +114,10 @@ func (s *Server) scheduleNameForSession(sessionID string) (string, bool) {
 // sends the instructions as the first message so pi runs autonomously. Returns
 // the created session's UUID. Used by both the timer and the Run-now endpoint.
 func (s *Server) fireSchedule(sc schedules.Schedule) (string, error) {
+	return s.fireScheduleContext(context.Background(), sc)
+}
+
+func (s *Server) fireScheduleContext(ctx context.Context, sc schedules.Schedule) (string, error) {
 	if s.schedules == nil {
 		return "", errors.New("schedules unavailable")
 	}
@@ -162,13 +166,13 @@ func (s *Server) fireSchedule(sc schedules.Schedule) (string, error) {
 		_ = s.schedules.FailRun(runID, "chat unavailable")
 		return sessionID, errors.New("chat unavailable")
 	}
-	workerCtx, cancel := context.WithTimeout(context.Background(), scheduleWorkerTimeout)
+	workerCtx, cancel := context.WithTimeout(ctx, scheduleWorkerTimeout)
 	defer cancel()
 	if err := s.chatSender.EnsureWorker(workerCtx, sessionID, resolved.Path); err != nil {
 		_ = s.schedules.FailRun(runID, err.Error())
 		return sessionID, fmt.Errorf("ensure worker: %w", err)
 	}
-	if err := s.chatSender.Send(context.Background(), sessionID, resolved.Path, chat.Request{Message: sc.Instructions}); err != nil {
+	if err := s.chatSender.Send(ctx, sessionID, resolved.Path, chat.Request{Message: sc.Instructions}); err != nil {
 		_ = s.schedules.FailRun(runID, err.Error())
 		return sessionID, fmt.Errorf("send: %w", err)
 	}

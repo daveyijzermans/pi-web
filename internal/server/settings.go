@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -68,7 +67,7 @@ var settingDefaults = map[string]string{
 	"pi-web:v1:artifacts:include": "*.md, *.html",
 	"pi-web:v1:toggle:thinking":      "true",
 	"pi-web:v1:toggle:tools":         "true",
-	"pi-web:v1:toggle:tool-outputs":  "false",
+	"pi-web:v1:toggle:tool-outputs": "false",
 }
 
 // getSettings returns every server-backed setting: defaults overlaid with any
@@ -206,8 +205,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Settings map[string]string `json:"settings"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	if len(body.Settings) == 0 {

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -75,8 +74,7 @@ func (s *Server) handleChatQueuePost(w http.ResponseWriter, r *http.Request) {
 		Message     string `json:"message"`
 		DisplayText string `json:"displayText"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	message := strings.TrimSpace(body.Message)
@@ -128,8 +126,7 @@ func (s *Server) handleChatQueuePatch(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Paused *bool `json:"paused"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	if body.Paused == nil {

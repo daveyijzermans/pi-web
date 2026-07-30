@@ -84,6 +84,10 @@ type Server struct {
 	stopCh                chan struct{}
 	stopOnce              sync.Once
 	wg                    sync.WaitGroup
+	taskMu                sync.Mutex
+	taskCtx               context.Context
+	taskCancel            context.CancelFunc
+	stopping              bool
 	db                    *sql.DB
 	schedules             *schedules.Store
 	chatQueue             *chatqueue.Store
@@ -144,6 +148,7 @@ func New(deps Deps) (*Server, error) {
 		return nil, err
 	}
 
+	taskCtx, taskCancel := context.WithCancel(context.Background())
 	s := &Server{
 		agentDir:              agentDir,
 		sessionsDir:           deps.SessionsDir,
@@ -158,6 +163,8 @@ func New(deps Deps) (*Server, error) {
 		models:                deps.Models,
 		lastKnown:             make(map[string]struct{}),
 		stopCh:                make(chan struct{}),
+		taskCtx:               taskCtx,
+		taskCancel:            taskCancel,
 		db:                    db,
 		schedules:             schedules.NewStore(db),
 		chatQueue:             chatqueue.NewStore(db),
@@ -276,15 +283,46 @@ func initDB(agentDir string) (*sql.DB, error) {
 // Idempotent and safe to call from any goroutine.
 func (s *Server) Shutdown() {
 	s.stopOnce.Do(func() {
-		close(s.stopCh)
+		s.taskMu.Lock()
+		s.stopping = true
+		if s.taskCancel != nil {
+			s.taskCancel()
+		}
+		if s.stopCh != nil {
+			close(s.stopCh)
+		}
+		s.taskMu.Unlock()
 		if s.queueDrainer != nil {
 			s.queueDrainer.stop()
 		}
+		s.wg.Wait()
 		if s.db != nil {
 			s.db.Close()
 		}
 	})
-	s.wg.Wait()
+}
+
+// startTask starts side-effecting background work owned by the server. Shutdown
+// prevents new tasks, cancels the shared context, and waits for accepted tasks
+// before closing SQLite.
+func (s *Server) startTask(task func(context.Context)) bool {
+	s.taskMu.Lock()
+	if s.stopping {
+		s.taskMu.Unlock()
+		return false
+	}
+	if s.taskCtx == nil {
+		s.taskCtx, s.taskCancel = context.WithCancel(context.Background())
+	}
+	ctx := s.taskCtx
+	s.wg.Add(1)
+	s.taskMu.Unlock()
+
+	go func() {
+		defer s.wg.Done()
+		task(ctx)
+	}()
+	return true
 }
 
 // Register installs every HTTP handler on mux, wrapped with the auth

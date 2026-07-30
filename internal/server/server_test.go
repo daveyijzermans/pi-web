@@ -150,3 +150,30 @@ func TestShutdownIsIdempotent(t *testing.T) {
 	s.Shutdown()
 	s.Shutdown() // must not panic
 }
+
+func TestShutdownCancelsAndWaitsForOwnedTasks(t *testing.T) {
+	s := newTestServer(t)
+	taskDone := make(chan struct{})
+	if !s.startTask(func(ctx context.Context) {
+		<-ctx.Done()
+		close(taskDone)
+	}) {
+		t.Fatal("startTask rejected work before shutdown")
+	}
+
+	s.Shutdown()
+
+	select {
+	case <-taskDone:
+	default:
+		t.Fatal("Shutdown returned before the owned task observed cancellation")
+	}
+}
+
+func TestStartTaskRejectsWorkAfterShutdown(t *testing.T) {
+	s := newTestServer(t)
+	s.Shutdown()
+	if s.startTask(func(context.Context) {}) {
+		t.Fatal("startTask accepted work after shutdown")
+	}
+}

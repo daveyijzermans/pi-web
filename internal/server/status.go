@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 
 	"pi-web/internal/workers"
@@ -101,9 +102,13 @@ func (s *Server) recomputeAndBroadcastStatus(sessionID string) {
 	// (shown even in the foreground) instead of the generic one.
 	if was && !now && s.push != nil && !s.disableBackgroundJobs {
 		if name, ok := s.scheduleNameForSession(sessionID); ok {
-			go s.push.NotifyScheduleDone(name, sessionID)
+			s.startTask(func(context.Context) {
+				s.push.NotifyScheduleDone(name, sessionID)
+			})
 		} else {
-			go s.push.NotifyDone(sessionID)
+			s.startTask(func(context.Context) {
+				s.push.NotifyDone(sessionID)
+			})
 		}
 	}
 

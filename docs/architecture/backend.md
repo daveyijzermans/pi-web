@@ -310,6 +310,13 @@ PWA / static asset routes (registered outside `Server.Register`):
 Request ──▶ auth.Wrap(handler)
                 │
                 ▼
+      unsafe browser method?
+                │
+       Origin host must match
+       request Host (even when
+       token auth is disabled)
+                │
+                ▼
         token set in env?
                 │
         ┌───────┴───────┐
@@ -330,6 +337,32 @@ Request ──▶ auth.Wrap(handler)
    ▼         ▼
  handler   401 Unauthorized
 ```
+
+The origin check protects the default tokenless localhost server from blind
+cross-site browser mutations. `GET`, `HEAD`, and `OPTIONS` are unaffected.
+Origin-less clients such as local CLI scripts remain compatible; a browser
+request explicitly marked `Sec-Fetch-Site: cross-site` is rejected even if it
+omits `Origin`. Tokenless requests also require a recognized `Host`: loopback
+hosts are always accepted, and the configured bind host plus the exact
+Tailscale hostname discovered at startup are added to the allowlist. This prevents DNS rebinding from turning a
+same-origin attacker hostname into access to the local server. The explicitly
+dangerous `--insecure` mode preserves its documented any-host behavior.
+
+JSON handlers share `decodeJSONBody`, which caps request bodies at 2 MiB,
+rejects multiple JSON values, and rejects an explicit media type other than
+`application/json`. An omitted `Content-Type` remains valid for CLI
+compatibility. Multipart chat uploads retain their separate 32 MiB total and
+10 MiB-per-image limits.
+
+## Background Work and Shutdown
+
+Side-effecting asynchronous work started by the server—chat dispatch, worker
+prewarming, scheduled runs, queue dispatch, auto-titling, and push
+notifications—is registered through `startTask`. Every task receives the
+server-owned context. Shutdown prevents new tasks, cancels that context, stops
+the long-running watchers/drainers, waits for all accepted work, and only then
+closes SQLite. The service restart trigger is intentionally detached because
+it must outlive the response that initiates shutdown.
 
 ## SSE Broadcasting
 

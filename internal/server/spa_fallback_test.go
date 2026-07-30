@@ -22,7 +22,7 @@ func TestSPAFallbackServesBrowserRoutesButNotAPIsOrAssets(t *testing.T) {
 
 	for _, path := range []string{"/", "/login", "/session", "/settings", "/future-route", "/settings/profile"} {
 		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://127.0.0.1:31415"+path, nil))
 		if rec.Code != http.StatusOK || rec.Body.String() != "spa shell" {
 			t.Fatalf("GET %s = (%d, %q), want SPA shell", path, rec.Code, rec.Body.String())
 		}
@@ -30,7 +30,7 @@ func TestSPAFallbackServesBrowserRoutesButNotAPIsOrAssets(t *testing.T) {
 
 	for _, path := range []string{"/api/unknown", "/static/assets/missing.js", "/missing.js", "/sounds/missing.mp3"} {
 		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://127.0.0.1:31415"+path, nil))
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("GET %s = %d, want 404", path, rec.Code)
 		}

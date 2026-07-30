@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -81,7 +82,9 @@ func (s *Server) recordModTime(sessID string, mod time.Time) {
 		// Only the regular server runs auto-title side effects. Development mode
 		// still broadcasts reloads from the shared session files.
 		if !s.disableBackgroundJobs {
-			go s.maybeAutoTitle(sessID)
+			s.startTask(func(ctx context.Context) {
+				s.maybeAutoTitleContext(ctx, sessID)
+			})
 		}
 	}
 	// Always recompute status for this session — the running state depends

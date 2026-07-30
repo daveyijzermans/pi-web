@@ -66,6 +66,10 @@ func Main(version string) {
 		os.Exit(1)
 	}
 	authMiddleware := auth.New(token)
+	authMiddleware.AllowHost(bindHost)
+	if *insecure {
+		authMiddleware.AllowAnyHost()
+	}
 
 	versionChecker := updater.New(version)
 
@@ -130,6 +134,7 @@ func Main(version string) {
 		if tsErr == nil && tsOk {
 			tailscaleURL = tsURL
 			tailscaleServe = true
+			authMiddleware.AllowHost(tsURL)
 		} else if tsErr != nil {
 			if tsCtx.Err() == context.DeadlineExceeded {
 				fmt.Fprintf(os.Stderr, "Tailscale Serve timed out after %s; continuing without it\n", tailscaleConfigureTimeout)
