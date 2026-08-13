@@ -49,6 +49,65 @@ describe('ToolCall', () => {
     expect(opts[0].dataset.answer).toBe('A');
   });
 
+  it('renders ask_question question_text payloads', () => {
+    const call = {
+      id: 'q',
+      name: 'ask_question',
+      arguments: {
+        questions: [
+          {
+            id: 'action',
+            label: 'Action',
+            question_text: 'What should I do?',
+            options: [{ value: 'keep', label: 'Keep current' }],
+            allowOther: false,
+          },
+        ],
+      },
+    };
+    const { container } = render(ToolCall, { props: { call, model: model() } });
+    expect(container.querySelector('.ask-question-text')?.textContent).toContain(
+      'What should I do?',
+    );
+    expect(container.querySelector('.ask-question-header')?.textContent).toBe('Action');
+    expect(container.querySelector('.ask-question-option-action')?.dataset.answer).toBe(
+      'Keep current',
+    );
+  });
+
+  it('renders completed ask_question array answers', () => {
+    const call = {
+      id: 'q',
+      name: 'ask_question',
+      arguments: {
+        questions: [
+          {
+            id: 'action',
+            question_text: 'What should I do?',
+            options: [{ value: 'keep', label: 'Keep current' }],
+          },
+        ],
+      },
+    };
+    const entries = [
+      {
+        type: 'message',
+        id: 'result',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'q',
+          content: [],
+          details: { answers: [{ id: 'action', value: 'keep', label: 'Keep current' }] },
+        },
+      },
+    ];
+    const { container } = render(ToolCall, { props: { call, model: model({ entries }) } });
+    expect(container.querySelector('.ask-question-option.selected')?.textContent).toContain(
+      'Keep current',
+    );
+    expect(container.querySelector('.ask-question-answer')?.textContent).toContain('Keep current');
+  });
+
   it('marks multi-select questions as needing submit', () => {
     const call = {
       id: 'q',

@@ -141,7 +141,7 @@
       >
     </div>
     {#if result && resultText.trim()}<ToolOutput text={resultText.trim()} maxLines={20} />{/if}
-  {:else if call.name === 'ask_user_question' || call.name === 'pi_web_ask_user_question'}
+  {:else if call.name === 'ask_user_question' || call.name === 'pi_web_ask_user_question' || call.name === 'ask_question'}
     <AskQuestion {args} {result} />
   {:else if rendered && (rendered.callHtml || rendered.resultHtmlCollapsed || rendered.resultHtmlExpanded)}
     {#if rendered.callHtml}<div class="tool-header ansi-rendered">
