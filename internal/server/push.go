@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,13 +20,13 @@ import (
 // subscriptions. Subscriptions are persisted as JSON on disk so they
 // survive restarts; one file under ~/.pi/agent/web/.
 type PushManager struct {
-	mu        sync.Mutex
-	publicKey string
+	mu         sync.Mutex
+	publicKey  string
 	privateKey string
-	subject   string
-	storeDir  string
-	subs      map[string]pushSub
-	client    *http.Client
+	subject    string
+	storeDir   string
+	subs       map[string]pushSub
+	client     *http.Client
 }
 
 type pushSub struct {
@@ -140,14 +142,26 @@ func (m *PushManager) handleVapid(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 0, map[string]any{"publicKey": m.PublicKey()})
 }
 
+// validPushEndpoint restricts subscriptions to absolute https:// URLs with a
+// host. The endpoint is later POSTed to when notifying, so this keeps the push
+// sender from being pointed at arbitrary schemes or internal hosts. Real Web
+// Push services (FCM, Mozilla autopush, WNS) are always https.
+func validPushEndpoint(endpoint string) bool {
+	u, err := url.Parse(endpoint)
+	return err == nil && u.Scheme == "https" && u.Host != ""
+}
+
 func (m *PushManager) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	var sub pushSub
-	if err := json.NewDecoder(r.Body).Decode(&sub); err != nil || sub.Endpoint == "" {
-		http.Error(w, "invalid subscription", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &sub) {
+		return
+	}
+	if !validPushEndpoint(sub.Endpoint) {
+		writeJSONError(w, http.StatusBadRequest, "invalid subscription")
 		return
 	}
 	m.mu.Lock()
@@ -165,8 +179,11 @@ func (m *PushManager) handleUnsubscribe(w http.ResponseWriter, r *http.Request) 
 	var body struct {
 		Endpoint string `json:"endpoint"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Endpoint == "" {
-		http.Error(w, "invalid endpoint", http.StatusBadRequest)
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	if body.Endpoint == "" {
+		writeJSONError(w, http.StatusBadRequest, "invalid endpoint")
 		return
 	}
 	m.mu.Lock()
@@ -176,9 +193,36 @@ func (m *PushManager) handleUnsubscribe(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, 0, map[string]any{"ok": true})
 }
 
-// NotifyDone sends a push to every registered subscription. Failed endpoints
-// (gone / 410) are pruned. Best-effort: errors are logged to stderr.
+// NotifyDone sends a "response ready" push for a finished session.
 func (m *PushManager) NotifyDone(sessionID string) {
+	m.notify(map[string]string{
+		"type":      "session-done",
+		"sessionId": sessionID,
+		"title":     "pi session",
+		"body":      "Response ready",
+	})
+}
+
+// NotifyScheduleDone sends a schedule-specific push when a scheduled run
+// finishes. Unlike session-done, the service worker shows this even when the
+// app is foregrounded, since a schedule firing is a background event the user
+// may not be watching.
+func (m *PushManager) NotifyScheduleDone(scheduleName, sessionID string) {
+	title := scheduleName
+	if strings.TrimSpace(title) == "" {
+		title = "Scheduled run"
+	}
+	m.notify(map[string]string{
+		"type":      "schedule-done",
+		"sessionId": sessionID,
+		"title":     title,
+		"body":      "Scheduled run finished",
+	})
+}
+
+// notify marshals payload and sends it to every registered subscription. Failed
+// endpoints (gone / 410) are pruned. Best-effort: errors are logged to stderr.
+func (m *PushManager) notify(payload map[string]string) {
 	if m == nil {
 		return
 	}
@@ -196,12 +240,7 @@ func (m *PushManager) NotifyDone(sessionID string) {
 	subj := m.subject
 	m.mu.Unlock()
 
-	payload, _ := json.Marshal(map[string]string{
-		"type":      "session-done",
-		"sessionId": sessionID,
-		"title":     "pi session",
-		"body":      "Response ready",
-	})
+	payloadBytes, _ := json.Marshal(payload)
 
 	var stale []string
 	for _, s := range subs {
@@ -209,7 +248,7 @@ func (m *PushManager) NotifyDone(sessionID string) {
 			Endpoint: s.Endpoint,
 			Keys:     webpush.Keys{P256dh: s.Keys.P256dh, Auth: s.Keys.Auth},
 		}
-		resp, err := webpush.SendNotification(payload, ws, &webpush.Options{
+		resp, err := webpush.SendNotification(payloadBytes, ws, &webpush.Options{
 			HTTPClient:      m.client,
 			Subscriber:      subj,
 			VAPIDPublicKey:  pub,

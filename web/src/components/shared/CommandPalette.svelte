@@ -78,9 +78,15 @@
   export async function fetchPaletteSessions({
     fetchImpl = fetch,
     getCwd = () => defaultSessionPaletteCwd(),
+    query = '',
+    limit = 50,
   } = {}) {
     const cwd = getCwd ? getCwd() : '';
-    const url = cwd ? '/api/sessions?project=' + encodeURIComponent(cwd) : '/api/sessions';
+    const params = [];
+    if (cwd) params.push('project=' + encodeURIComponent(cwd));
+    if (query) params.push('q=' + encodeURIComponent(query));
+    if (Number.isFinite(limit) && limit > 0) params.push('limit=' + limit);
+    const url = '/api/sessions' + (params.length ? '?' + params.join('&') : '');
     const response = await fetchImpl(url);
     const data = await response.json();
     return (data.sessions || []).sort((a, b) => {
@@ -99,12 +105,15 @@
 
 <script>
   import { onMount, tick } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import {
     getSessionPaletteApi,
     setSessionPaletteApi,
   } from '../../shared/command-palette-runtime.js';
   import { icon, X } from '../../shared/icons.js';
   import { t } from '../../shared/i18n.js';
+  import { createStatusEvents } from '../../shared/status-events.js';
+  import { getSpinnerConfig } from '../../session/live/chat-preview.js';
 
   let {
     limit = 8,
@@ -114,7 +123,7 @@
     onClose = null,
     onQueryChange = null,
     onNewSession = null,
-    onImportSession = null,
+    runningSessionIds = null,
     clearOnClose = false,
     fetchImpl = null,
     navigate = null,
@@ -128,10 +137,36 @@
   let allSessions = $state([]);
   let selectedIndex = $state(-1);
   let error = $state('');
+  let spinnerChar = $state('');
+  let spinnerStyle = $state('');
   let loadGeneration = 0;
+  let spinnerTimer = null;
+  const observedRunningSessionIds = new SvelteSet();
 
   const effectiveFetch = $derived(fetchImpl || window.fetch.bind(window));
   const visibleSessions = $derived(filterPaletteSessions(allSessions, query).slice(0, limit));
+  const effectiveRunningSessionIds = $derived(runningSessionIds || observedRunningSessionIds);
+
+  function isRunning(session) {
+    return effectiveRunningSessionIds.has(session.id);
+  }
+
+  function startSpinner() {
+    if (spinnerTimer) return;
+    const config = getSpinnerConfig(window);
+    let frame = 0;
+    spinnerStyle = `font-family:${config.fontFamily};width:${config.width}`;
+    spinnerChar = config.frames[0] || '';
+    spinnerTimer = window.setInterval(() => {
+      frame = (frame + 1) % config.frames.length;
+      spinnerChar = config.frames[frame] || '';
+    }, config.interval);
+  }
+
+  function stopSpinner() {
+    if (spinnerTimer) window.clearInterval(spinnerTimer);
+    spinnerTimer = null;
+  }
 
   function go(url) {
     if (!url) return;
@@ -142,6 +177,7 @@
   function close() {
     if (!open) return;
     open = false;
+    stopSpinner();
     selectedIndex = -1;
     if (clearOnClose) query = '';
     document.body?.classList.remove('pi-palette-open');
@@ -163,7 +199,8 @@
     error = '';
     try {
       const loader =
-        loadSessions || (() => fetchPaletteSessions({ fetchImpl: effectiveFetch, getCwd }));
+        loadSessions ||
+        (() => fetchPaletteSessions({ fetchImpl: effectiveFetch, getCwd, query, limit: 50 }));
       const sessions = await loader({ query, documentImpl: document, windowImpl: window });
       if (generation !== loadGeneration) return;
       allSessions = (sessions || []).map(normalizePaletteSession);
@@ -179,6 +216,7 @@
     if (open) return;
     onOpen?.();
     open = true;
+    startSpinner();
     document.body?.classList.add('pi-palette-open');
     await tick();
     inputEl?.focus();
@@ -189,9 +227,12 @@
     return reloadSessions();
   }
 
+  let searchTimer = null;
   function handleInput() {
     onQueryChange?.(query);
     selectedIndex = -1;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => reloadSessions(), 160);
   }
 
   function selectVisible(index) {
@@ -249,6 +290,20 @@
   }
 
   onMount(() => {
+    const statusEvents = runningSessionIds
+      ? null
+      : createStatusEvents({
+          onSnapshot: ({ ids }) => {
+            observedRunningSessionIds.clear();
+            for (const id of ids) observedRunningSessionIds.add(id);
+          },
+          onDelta: ({ id, running }) => {
+            if (running) observedRunningSessionIds.add(id);
+            else observedRunningSessionIds.delete(id);
+          },
+        });
+    statusEvents?.connect();
+
     const api = { open: openPalette, close, refresh };
     const previousApi = getSessionPaletteApi();
     setSessionPaletteApi(api);
@@ -261,6 +316,9 @@
     const keydown = (e) => handleKeydown(e);
     window.addEventListener('keydown', keydown);
     return () => {
+      clearTimeout(searchTimer);
+      stopSpinner();
+      statusEvents?.cleanup();
       window.removeEventListener('keydown', keydown);
       if (getSessionPaletteApi() === api) setSessionPaletteApi(previousApi);
       if (window.__piSessionPalette === api) delete window.__piSessionPalette;
@@ -323,7 +381,17 @@
             bind:this={resultButtons[i]}
             onclick={() => selectVisible(i)}
           >
-            <span class="palette-result-title">{session.title}</span>
+            <span class="palette-result-heading">
+              <span class="palette-result-title">{session.title}</span>
+              {#if isRunning(session)}
+                <span
+                  class="palette-running-spinner"
+                  data-running-spinner
+                  aria-label={t('index.active')}
+                  style={spinnerStyle}>{spinnerChar}</span
+                >
+              {/if}
+            </span>
             <span class="palette-result-meta">{session.meta}</span>
           </button>
         {/each}
@@ -332,17 +400,6 @@
     <div class="palette-section-title">{t('palette.actions')}</div>
     <button class="palette-action" type="button" data-new-session-btn onclick={startNewSession}
       >{t('palette.newSession')}</button
-    >
-    <button
-      class="palette-action muted"
-      type="button"
-      data-import-session-btn
-      disabled={!onImportSession}
-      aria-disabled={!onImportSession}
-      onclick={() => {
-        close();
-        onImportSession?.();
-      }}>{t('index.importSession')}</button
     >
   </div>
 </div>

@@ -19,16 +19,31 @@
   const needsSubmit = $derived(isMulti || anyMultiSelect);
 
   function optionLabel(option) {
-    return typeof option?.label === 'string' ? option.label : String(option || '');
+    if (typeof option?.label === 'string') return option.label;
+    if (typeof option?.value === 'string') return option.value;
+    return String(option || '');
   }
   function optionDesc(option) {
     return typeof option?.description === 'string' ? option.description : '';
+  }
+  function answerFor(q, questionText) {
+    if (Array.isArray(answers)) {
+      const answer = answers.find((item) => item?.id === q?.id);
+      return answer?.label ?? answer?.value ?? '';
+    }
+    return answers[questionText] ?? answers[q?.id] ?? '';
   }
   function isSelected(answer, label) {
     return answer === label || (typeof answer === 'string' && answer.split(', ').includes(label));
   }
   function questionTextOf(q, i) {
-    return typeof q.question === 'string' ? q.question : `Question ${i + 1}`;
+    if (typeof q?.question === 'string') return q.question;
+    if (typeof q?.question_text === 'string') return q.question_text;
+    if (typeof q?.prompt === 'string') return q.prompt;
+    return `Question ${i + 1}`;
+  }
+  function questionHeaderOf(q) {
+    return q?.header ?? q?.label ?? '';
   }
 </script>
 
@@ -58,14 +73,16 @@
 
   {#each questions as q, qIndex (questionTextOf(q, qIndex))}
     {@const questionText = questionTextOf(q, qIndex)}
-    {@const answer = answers[questionText]}
+    {@const answer = answerFor(q, questionText)}
     {@const options = Array.isArray(q.options) ? q.options : []}
     <div
       class="ask-question-block"
       data-question-text={questionText}
       data-multi-select={q && q.multiSelect === true}
     >
-      {#if q.header}<div class="ask-question-header">{String(q.header)}</div>{/if}
+      {#if questionHeaderOf(q)}<div class="ask-question-header">
+          {String(questionHeaderOf(q))}
+        </div>{/if}
       <div class="ask-question-text">{questionText}</div>
       {#if options.length > 0}
         <div class="ask-question-options">

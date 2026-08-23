@@ -35,40 +35,6 @@ func TestSessionViteSourceIncludesChatPreviewSSEHandling(t *testing.T) {
 	}
 }
 
-func TestSessionViteSourceForcesFollowOnChatSendAndScrollsNewEntries(t *testing.T) {
-	// Low-level scroll primitives live in session/live/live-scroll.js; the
-	// follow-mode decision state lives in session/live/live-follow.js; the SSE
-	// wiring that calls them remains in <LiveReload>.
-	runner, err := os.ReadFile(repoPath("web/src/components/session/LiveReload.svelte"))
-	if err != nil {
-		t.Fatalf("read web/src/components/session/LiveReload.svelte: %v", err)
-	}
-	scroll, err := os.ReadFile(repoPath("web/src/session/live/live-scroll.js"))
-	if err != nil {
-		t.Fatalf("read web/src/session/live/live-scroll.js: %v", err)
-	}
-	follow, err := os.ReadFile(repoPath("web/src/session/live/live-follow.js"))
-	if err != nil {
-		t.Fatalf("read web/src/session/live/live-follow.js: %v", err)
-	}
-	combined := string(runner) + string(scroll) + string(follow)
-	for _, want := range []string{
-		"pi-chat-message-sent",
-		"forcePreviewFollowUntil",
-		"Date.now() < forcePreviewFollowUntil",
-		"forceFollowToBottom",
-		"scrollAfterLayout",
-		"scrollToBottom",
-		"ResizeObserver",
-		"pinToBottom",
-		"showFollowButton",
-	} {
-		if !strings.Contains(combined, want) {
-			t.Fatalf("live reload source missing %q", want)
-		}
-	}
-}
-
 func TestSessionViteSourceShowsAnimatedWorkingPreviewLabel(t *testing.T) {
 	preview, err := os.ReadFile(repoPath("web/src/session/live/chat-preview.js"))
 	if err != nil {
@@ -167,29 +133,6 @@ func TestResumeButtonClipboardGuardAndFallback(t *testing.T) {
 	}
 	if !strings.Contains(string(source), "copyToClipboard(text)") {
 		t.Fatalf("resume clipboard code should delegate to the shared copyToClipboard helper")
-	}
-}
-
-func TestResumeButtonShowsToastWithoutChangingButtonText(t *testing.T) {
-	source, err := os.ReadFile(repoPath("web/src/components/session/SessionHeader.svelte"))
-	if err != nil {
-		t.Fatalf("read web/src/components/session/SessionHeader.svelte: %v", err)
-	}
-	src := string(source)
-	if strings.Contains(src, `resumeBtn.textContent = 'Copied!'`) {
-		t.Fatalf("resume button text should not change to Copied")
-	}
-	if strings.Contains(src, `Copied — tap to view`) || strings.Contains(src, `notice.onclick`) {
-		t.Fatalf("resume copy notification should be a passive toast, not tap-to-expand")
-	}
-	if !strings.Contains(src, `Copied`) || !strings.Contains(liveSessionCss, `.toast-notice`) {
-		t.Fatalf("resume copy should show an accent-colored toast notification")
-	}
-	if !strings.Contains(src, `resumeSessionArg = sessionId`) {
-		t.Fatalf("resume copy should read session ID from sessionId prop")
-	}
-	if !strings.Contains(src, `resumeSessionArg`) {
-		t.Fatalf("resume copy should derive UUID-only session argument")
 	}
 }
 

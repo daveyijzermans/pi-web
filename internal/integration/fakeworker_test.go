@@ -21,12 +21,12 @@ type fakeWorker struct {
 	err   string
 	model string
 
-	prompts        []chat.Request
-	setModelCalls  []modelCall
+	prompts          []chat.Request
+	setModelCalls    []modelCall
 	setThinkingCalls []string
-	compactCalls   int
-	abortCalls     int
-	closeCalls     int
+	compactCalls     int
+	abortCalls       int
+	closeCalls       int
 
 	// crashMode: when true, Prompt returns an error and Status reports error.
 	crashMode bool
@@ -142,5 +142,5 @@ func (f *fakeWorker) IdleSince(now time.Time) time.Duration {
 }
 
 // inspector (matches workers.inspector)
-func (f *fakeWorker) PID() int         { return 0 }
+func (f *fakeWorker) PID() int             { return 0 }
 func (f *fakeWorker) StartedAt() time.Time { return time.Time{} }

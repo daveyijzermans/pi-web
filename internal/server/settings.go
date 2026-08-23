@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -24,6 +23,10 @@ func (s *Server) handleAppShell(w http.ResponseWriter, r *http.Request, bootstra
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// The shell references content-hashed asset paths, so it must never be
+	// cached: a stale shell would point at old (now-404) chunks and pin the
+	// browser to an outdated bundle after a rebuild.
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	if err := s.renderAppShell(w, bootstrap); err != nil {
 		if !isBrokenPipe(err) {
 			fmt.Fprintf(os.Stderr, "app shell template error: %v\n", err)
@@ -38,31 +41,34 @@ func (s *Server) handleAppShell(w http.ResponseWriter, r *http.Request, bootstra
 // live-timer state (sidebar widths, focus countdown, tree toggles) is NOT
 // listed here — it stays in localStorage only.
 var settingDefaults = map[string]string{
-	"pi-web-theme":                "dark",
-	"pi-web:v1:locale":            "en",
-	"pi-web:v1:custom-languages":  "",
-	"pi-web:v1:font-ui":           "mono",
-	"pi-web:v1:font-content":      "mono",
-	"pi-web:v1:font-code":         "mono",
-	"pi-web:v1:font-ui-size":      "12",
-	"pi-web:v1:font-content-size": "13",
-	"pi-sessions:spinner-style":   "runcat",
-	"pi-share:v1:notify-on-done":  "false",
-	"pi-share:v1:done-sound":      "cat.mp3",
-	"pi-sessions:view-layout":     "timeline",
-	"pi-web:v1:show-btw-in-index": "false",
-	"pi-web:v1:cat:enabled":       "true",
-	"pi-web:v1:cat:focus-min":     "25",
-	"pi-web:v1:cat:break-min":     "5",
-	"pi-web:v1:cat:bedtime":       "23:00",
-	"pi-web:v1:cat:wakeup":        "07:00",
-	"pi-web:v1:cat:sleep-min":     "2",
-	settingAutoTitleEnabled:       "true",
-	settingAutoTitleMode:          "each-turn",
-	settingAutoTitleModel:         "",
-	"pi-web:v1:artifacts:enabled": "true",
-	"pi-web:v1:artifacts:include": "*.md, *.html",
+	"pi-web-theme":                  "dark",
+	"pi-web:v1:locale":              "en",
+	"pi-web:v1:custom-languages":    "",
+	"pi-web:v1:font-ui":             "mono",
+	"pi-web:v1:font-content":        "mono",
+	"pi-web:v1:font-code":           "mono",
+	"pi-web:v1:font-ui-size":        "12",
+	"pi-web:v1:font-content-size":   "13",
+	"pi-sessions:spinner-style":     "runcat",
+	"pi-share:v1:notify-on-done":    "false",
+	"pi-share:v1:done-sound":        "cat.mp3",
+	"pi-sessions:view-layout":       "timeline",
+	"pi-web:v1:show-btw-in-index":   "false",
+	"pi-web:v1:cat:enabled":         "true",
+	"pi-web:v1:cat:focus-min":       "25",
+	"pi-web:v1:cat:break-min":       "5",
+	"pi-web:v1:cat:bedtime":         "23:00",
+	"pi-web:v1:cat:wakeup":          "07:00",
+	"pi-web:v1:cat:sleep-min":       "2",
+	settingAutoTitleEnabled:         "true",
+	settingAutoTitleMode:            "each-turn",
+	settingAutoTitleModel:           "",
+	"pi-web:v1:artifacts:enabled":   "true",
+	"pi-web:v1:artifacts:include":   "*.md, *.html",
 	"pi-sessions:archived-projects": "[]",
+	"pi-web:v1:toggle:thinking":     "true",
+	"pi-web:v1:toggle:tools":        "true",
+	"pi-web:v1:toggle:tool-outputs": "false",
 }
 
 // getSettings returns every server-backed setting: defaults overlaid with any
@@ -200,8 +206,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Settings map[string]string `json:"settings"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	if len(body.Settings) == 0 {

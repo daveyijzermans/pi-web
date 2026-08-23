@@ -22,6 +22,7 @@ function normalizeDelta(payload) {
     model: typeof payload.model === 'string' ? payload.model : '',
     modelName: typeof payload.modelName === 'string' ? payload.modelName : '',
     modelProvider: typeof payload.modelProvider === 'string' ? payload.modelProvider : '',
+    project: typeof payload.project === 'string' ? payload.project : '',
   };
 }
 

@@ -1,7 +1,7 @@
 {
   "name": "@ygncode/pi-web",
   "description": "Remote control your pi coding agent from any browser on your network",
-  "version": "0.0.1-beta.30",
+  "version": "0.0.1-beta.36",
   "keywords": [
     "pi-package"
   ],
@@ -14,8 +14,8 @@
     ]
   },
   "scripts": {
-    "postinstall": "bash install.sh",
-    "preuninstall": "bash uninstall.sh",
+    "postinstall": "node scripts/run-lifecycle.mjs install",
+    "preuninstall": "node scripts/run-lifecycle.mjs uninstall",
     "test:extensions": "vitest run --config tests/extensions/vitest.config.ts"
   },
   "dependencies": {

@@ -18,8 +18,10 @@ import (
 
 	"pi-web/internal/agentdir"
 	"pi-web/internal/auth"
+	"pi-web/internal/chatqueue"
 	"pi-web/internal/render"
 	"pi-web/internal/rpc"
+	"pi-web/internal/schedules"
 	"pi-web/internal/sessions"
 	"pi-web/internal/updater"
 
@@ -54,37 +56,48 @@ type Deps struct {
 	// RunRestart restarts the pi-web service (detached) so the new binary
 	// takes over. Optional; when nil /api/restart responds 503.
 	RunRestart func() error
+	// DisableBackgroundJobs keeps the development server from duplicating the
+	// installed server's scheduler, queue drainer, auto-titles, and pushes.
+	DisableBackgroundJobs bool
 }
 
 // Server holds runtime state — connected SSE clients and last-seen modtimes
 // per session file. Construct via New; register HTTP routes via Register.
 type Server struct {
-	agentDir            string
-	sessionsDir         string
-	clients             []*sseClient
-	clientsMu           sync.RWMutex
-	fileMod             map[string]time.Time
-	fileActivity        map[string]time.Time
-	fileModMu           sync.RWMutex
-	chatSender          ChatSender
-	cache               *sessions.Cache
-	auth                *auth.Middleware
-	shareRunner         shareCmdRunner
-	now                 func() time.Time
-	renderExportSession func(s sessions.Session, theme string) string
-	renderAppShell      func(w io.Writer, bootstrap string) error
-	models              func(ctx context.Context) (json.RawMessage, error)
-	lastKnown           map[string]struct{} // session ids currently broadcast as running
-	lastKnownMu         sync.Mutex
-	push                *PushManager
-	stopCh              chan struct{}
-	stopOnce            sync.Once
-	wg                  sync.WaitGroup
-	db                  *sql.DB
-	updater             *updater.Checker
-	runInstall          func(ctx context.Context) error
-	runRestart          func() error
-	updateMu            sync.Mutex // serializes install/restart operations
+	agentDir              string
+	sessionsDir           string
+	clients               []*sseClient
+	clientsMu             sync.RWMutex
+	fileMod               map[string]time.Time
+	fileActivity          map[string]time.Time
+	fileModMu             sync.RWMutex
+	chatSender            ChatSender
+	cache                 *sessions.Cache
+	auth                  *auth.Middleware
+	shareRunner           shareCmdRunner
+	now                   func() time.Time
+	renderExportSession   func(s sessions.Session, theme string) string
+	renderAppShell        func(w io.Writer, bootstrap string) error
+	models                func(ctx context.Context) (json.RawMessage, error)
+	lastKnown             map[string]struct{} // session ids currently broadcast as running
+	lastKnownMu           sync.Mutex
+	push                  *PushManager
+	stopCh                chan struct{}
+	stopOnce              sync.Once
+	wg                    sync.WaitGroup
+	taskMu                sync.Mutex
+	taskCtx               context.Context
+	taskCancel            context.CancelFunc
+	stopping              bool
+	db                    *sql.DB
+	schedules             *schedules.Store
+	chatQueue             *chatqueue.Store
+	queueDrainer          *queueDrainer
+	updater               *updater.Checker
+	runInstall            func(ctx context.Context) error
+	runRestart            func() error
+	updateMu              sync.Mutex // serializes install/restart operations
+	disableBackgroundJobs bool
 
 	// fileWalk caches bounded directory listings per cwd for the @mention
 	// autocomplete so rapid keystrokes reuse a single filesystem walk.
@@ -136,25 +149,31 @@ func New(deps Deps) (*Server, error) {
 		return nil, err
 	}
 
+	taskCtx, taskCancel := context.WithCancel(context.Background())
 	s := &Server{
-		agentDir:            agentDir,
-		sessionsDir:         deps.SessionsDir,
-		clients:             make([]*sseClient, 0),
-		fileMod:             make(map[string]time.Time),
-		fileActivity:        make(map[string]time.Time),
-		chatSender:          deps.ChatSender,
-		cache:               deps.Cache,
-		auth:                deps.Auth,
-		now:                 now,
-		renderExportSession: deps.RenderExportSession,
-		renderAppShell:      deps.RenderAppShell,
-		models:              deps.Models,
-		lastKnown:           make(map[string]struct{}),
-		stopCh:              make(chan struct{}),
-		db:                  db,
-		updater:             deps.Updater,
-		runInstall:          deps.RunInstall,
-		runRestart:          deps.RunRestart,
+		agentDir:              agentDir,
+		sessionsDir:           deps.SessionsDir,
+		clients:               make([]*sseClient, 0),
+		fileMod:               make(map[string]time.Time),
+		fileActivity:          make(map[string]time.Time),
+		chatSender:            deps.ChatSender,
+		cache:                 deps.Cache,
+		auth:                  deps.Auth,
+		now:                   now,
+		renderExportSession:   deps.RenderExportSession,
+		renderAppShell:        deps.RenderAppShell,
+		models:                deps.Models,
+		lastKnown:             make(map[string]struct{}),
+		stopCh:                make(chan struct{}),
+		taskCtx:               taskCtx,
+		taskCancel:            taskCancel,
+		db:                    db,
+		schedules:             schedules.NewStore(db),
+		chatQueue:             chatqueue.NewStore(db),
+		updater:               deps.Updater,
+		runInstall:            deps.RunInstall,
+		runRestart:            deps.RunRestart,
+		disableBackgroundJobs: deps.DisableBackgroundJobs,
 		metrics: metricsState{
 			startedAt: now(),
 			cpuLast:   make(map[int]cpuMark),
@@ -166,6 +185,8 @@ func New(deps Deps) (*Server, error) {
 			userOwned: make(map[string]bool),
 		},
 	}
+	s.schedules.Now = now
+	s.chatQueue.Now = now
 	if pm, err := NewPushManager(agentDir); err != nil {
 		fmt.Fprintf(os.Stderr, "push notifications unavailable: %v\n", err)
 	} else {
@@ -181,6 +202,17 @@ func New(deps Deps) (*Server, error) {
 		defer s.wg.Done()
 		s.runStatusSweeper(s.stopCh, time.Second)
 	}()
+	if !s.disableBackgroundJobs {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.runScheduler(s.stopCh, scheduleTickInterval)
+		}()
+		// Autonomous queue drainer: drains chat_queue items into the worker even
+		// when nobody has the session open in a browser. Stop in Shutdown.
+		s.queueDrainer = newQueueDrainer(s)
+		s.queueDrainer.start()
+	}
 	return s, nil
 }
 
@@ -198,6 +230,18 @@ func initDB(agentDir string) (*sql.DB, error) {
 	// annotation writes). Serialize on a single connection so writes queue
 	// instead of failing.
 	db.SetMaxOpenConns(1)
+	// WAL mode lets readers and the (single) writer make progress concurrently,
+	// which keeps GET /api/chat/queue snappy when the autonomous drainer is
+	// holding the write half. busy_timeout is the small safety net for the rare
+	// schema/migration-time write contention.
+	if _, err := db.Exec(`PRAGMA journal_mode=WAL`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("enable WAL: %w", err)
+	}
+	if _, err := db.Exec(`PRAGMA busy_timeout=5000`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("set busy_timeout: %w", err)
+	}
 
 	schema := []struct {
 		name string
@@ -219,6 +263,15 @@ func initDB(agentDir string) (*sql.DB, error) {
 		{"btw_sessions table", btwSessionsSchema},
 		{"annotations table", annotationsSchema},
 		{"annotations index", annotationsIndex},
+		{"schedules table", schedules.SchedulesTableDDL},
+		{"schedule_runs table", schedules.RunsTableDDL},
+		{"schedule_runs schedule index", schedules.RunsScheduleIndexDDL},
+		{"schedule_runs session index", schedules.RunsSessionIndexDDL},
+		{"review_comments table", reviewCommentsSchema},
+		{"review_comments index", reviewCommentsIndex},
+		{"chat_queue_items table", chatqueue.ItemsTableDDL},
+		{"chat_queue_items index", chatqueue.ItemsSessionIndexDDL},
+		{"chat_queue_state table", chatqueue.StateTableDDL},
 	}
 	for _, s := range schema {
 		if _, err := db.Exec(s.stmt); err != nil {
@@ -234,12 +287,46 @@ func initDB(agentDir string) (*sql.DB, error) {
 // Idempotent and safe to call from any goroutine.
 func (s *Server) Shutdown() {
 	s.stopOnce.Do(func() {
-		close(s.stopCh)
+		s.taskMu.Lock()
+		s.stopping = true
+		if s.taskCancel != nil {
+			s.taskCancel()
+		}
+		if s.stopCh != nil {
+			close(s.stopCh)
+		}
+		s.taskMu.Unlock()
+		if s.queueDrainer != nil {
+			s.queueDrainer.stop()
+		}
+		s.wg.Wait()
 		if s.db != nil {
 			s.db.Close()
 		}
 	})
-	s.wg.Wait()
+}
+
+// startTask starts side-effecting background work owned by the server. Shutdown
+// prevents new tasks, cancels the shared context, and waits for accepted tasks
+// before closing SQLite.
+func (s *Server) startTask(task func(context.Context)) bool {
+	s.taskMu.Lock()
+	if s.stopping {
+		s.taskMu.Unlock()
+		return false
+	}
+	if s.taskCtx == nil {
+		s.taskCtx, s.taskCancel = context.WithCancel(context.Background())
+	}
+	ctx := s.taskCtx
+	s.wg.Add(1)
+	s.taskMu.Unlock()
+
+	go func() {
+		defer s.wg.Done()
+		task(ctx)
+	}()
+	return true
 }
 
 // Register installs every HTTP handler on mux, wrapped with the auth
@@ -276,6 +363,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/files", s.auth.Wrap(s.handleApiFiles))
 	mux.HandleFunc("/api/git/info", s.auth.Wrap(s.handleGitInfo))
 	mux.HandleFunc("/api/git/dirty-files", s.auth.Wrap(s.handleGitDirtyFiles))
+	mux.HandleFunc("/api/git/rename-branch", s.auth.Wrap(s.handleGitRenameBranch))
+	mux.HandleFunc("/api/git/diff", s.auth.Wrap(s.handleGitDiff))
+	mux.HandleFunc("/api/diff/reviews", s.auth.Wrap(s.handleReviewComments))
 	mux.HandleFunc("/api/files/tree", s.auth.Wrap(s.handleFilesTree))
 	mux.HandleFunc("/api/files/git-status", s.auth.Wrap(s.handleFilesGitStatus))
 	mux.HandleFunc("/api/files/download", s.auth.Wrap(s.handleFilesDownload))
@@ -284,10 +374,15 @@ func (s *Server) Register(mux *http.ServeMux) {
 	// variables only.
 	mux.HandleFunc("/custom-themes.css", s.handleCustomThemes)
 	mux.HandleFunc("/api/scratchpad", s.getPostHandler(s.handleGetScratchpad, s.handleSaveScratchpad))
+	mux.HandleFunc("/api/chat/queue", s.auth.Wrap(s.handleChatQueue))
 	mux.HandleFunc("/api/annotations", s.auth.Wrap(s.handleAnnotations))
 	mux.HandleFunc("/api/settings", s.getPostHandler(s.handleGetSettings, s.handleSaveSettings))
 	mux.HandleFunc("/api/btw", s.auth.Wrap(s.handleGetBtw))
 	mux.HandleFunc("/api/btw/new", s.auth.Wrap(s.handleNewBtw))
+	mux.HandleFunc("/api/schedules", s.auth.Wrap(s.handleApiSchedules))
+	mux.HandleFunc("/api/schedule", s.auth.Wrap(s.handleApiSchedule))
+	mux.HandleFunc("/api/schedule/run", s.auth.Wrap(s.handleApiScheduleRun))
+	mux.HandleFunc("/api/schedule/runs", s.auth.Wrap(s.handleApiScheduleRuns))
 	mux.HandleFunc("/metrics", s.auth.Wrap(s.handleMetricsPage))
 	mux.HandleFunc("/api/metrics", s.auth.Wrap(s.handleMetrics))
 	s.registerPprof(mux)

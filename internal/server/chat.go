@@ -84,11 +84,14 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	go func() {
-		if err := s.chatSender.Send(context.Background(), sessionID, sessionPath, chatReq); err != nil {
+	if !s.startTask(func(ctx context.Context) {
+		if err := s.chatSender.Send(ctx, sessionID, sessionPath, chatReq); err != nil && !errors.Is(err, context.Canceled) {
 			fmt.Fprintf(os.Stderr, "chat send failed for %s: %v\n", sessionID, err)
 		}
-	}()
+	}) {
+		writeJSONError(w, http.StatusServiceUnavailable, "server is shutting down")
+		return
+	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true, "status": "queued"})
 }
 
@@ -280,8 +283,7 @@ func (s *Server) handleSetModel(w http.ResponseWriter, r *http.Request) {
 		Provider string `json:"provider"`
 		ModelID  string `json:"modelId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	if body.Provider == "" || body.ModelID == "" {
@@ -307,8 +309,7 @@ func (s *Server) handleSetThinkingLevel(w http.ResponseWriter, r *http.Request) 
 	var body struct {
 		Level string `json:"level"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	if body.Level == "" {

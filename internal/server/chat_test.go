@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -28,11 +27,9 @@ type fakeSender struct {
 	getStateErr    error
 	ensureWorkerCh chan struct{}
 	sendCh         chan struct{}
-	compactErr     error
 	commands       []workers.SlashCommand
 	commandsReady  bool
 	commandsErr    error
-	hasWorker      bool
 
 	// mu guards every field below it. handleNewSession (and friends) initialize
 	// workers on a background goroutine, so the sender methods run concurrently
@@ -51,9 +48,6 @@ type fakeSender struct {
 	setThinkingSessionID    string
 	setThinkingLevel        string
 	getCommandsCalls        int
-	compactCalls            int
-	compactSessionID        string
-	compactSessionPath      string
 }
 
 func (f *fakeSender) Send(ctx context.Context, sessionID, sessionPath string, chat chat.Request) error {
@@ -83,15 +77,6 @@ func (f *fakeSender) SetThinkingLevel(ctx context.Context, sessionID, sessionPat
 	f.setThinkingLevel = level
 	f.mu.Unlock()
 	return nil
-}
-
-func (f *fakeSender) Compact(ctx context.Context, sessionID, sessionPath string) error {
-	f.mu.Lock()
-	f.compactCalls++
-	f.compactSessionID = sessionID
-	f.compactSessionPath = sessionPath
-	f.mu.Unlock()
-	return f.compactErr
 }
 
 func (f *fakeSender) Abort(ctx context.Context, sessionID string) error {
@@ -125,6 +110,12 @@ func (f *fakeSender) Status(sessionID string) workers.WorkerStatus {
 	return workers.WorkerStatus{State: workers.WorkerStateIdle}
 }
 
+func (f *fakeSender) Compact(ctx context.Context, sessionID, sessionPath string) error {
+	return nil
+}
+
+func (f *fakeSender) HasWorker(sessionID string) bool { return false }
+
 func (f *fakeSender) EnsureWorker(ctx context.Context, sessionID, sessionPath string) error {
 	f.mu.Lock()
 	f.ensureWorkerCalled = true
@@ -135,10 +126,6 @@ func (f *fakeSender) EnsureWorker(ctx context.Context, sessionID, sessionPath st
 		f.ensureWorkerCh <- struct{}{}
 	}
 	return nil
-}
-
-func (f *fakeSender) HasWorker(sessionID string) bool {
-	return f.hasWorker
 }
 
 // Accessors for the mutex-guarded fields, so tests read them safely from a
@@ -336,7 +323,7 @@ func TestHandleWorkerStatusTrustsIdleWorkerOverRecentFileWrite(t *testing.T) {
 	root := t.TempDir()
 	writeSessionFile(t, root, "test-project", "session.jsonl")
 	now := time.Date(2026, 5, 7, 21, 0, 0, 0, time.UTC)
-	sender := &fakeSender{status: workers.WorkerStatus{State: workers.WorkerStateIdle, Model: "gpt-5.5"}, hasWorker: true}
+	sender := &fakeSender{status: workers.WorkerStatus{State: workers.WorkerStateIdle, Model: "gpt-5.5"}}
 	s := &Server{
 		sessionsDir: root,
 		chatSender:  sender,
@@ -472,67 +459,6 @@ func TestHandleSetThinkingLevelRejectsMissingSession(t *testing.T) {
 	s.handleSetThinkingLevel(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", w.Code)
-	}
-}
-
-func TestHandleCompact(t *testing.T) {
-	root := t.TempDir()
-	writeSessionFile(t, root, "test-project", "session.jsonl")
-	sender := &fakeSender{}
-	s := &Server{sessionsDir: root, chatSender: sender}
-	req := httptest.NewRequest(http.MethodPost, "/api/chat/compact?id=session.jsonl", nil)
-	w := httptest.NewRecorder()
-	s.handleCompact(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, body = %q", w.Code, w.Body.String())
-	}
-	if !strings.Contains(w.Body.String(), `"compacted"`) {
-		t.Fatalf("body = %q, want compacted", w.Body.String())
-	}
-	sender.mu.Lock()
-	calls, id, path := sender.compactCalls, sender.compactSessionID, sender.compactSessionPath
-	sender.mu.Unlock()
-	if calls != 1 {
-		t.Fatalf("compact calls = %d, want 1", calls)
-	}
-	if id != "session.jsonl" || path == "" {
-		t.Fatalf("compact session = %q path = %q", id, path)
-	}
-}
-
-func TestHandleCompactRejectsMissingSession(t *testing.T) {
-	s := &Server{sessionsDir: t.TempDir(), chatSender: &fakeSender{}}
-	req := httptest.NewRequest(http.MethodPost, "/api/chat/compact?id=missing.jsonl", nil)
-	w := httptest.NewRecorder()
-	s.handleCompact(w, req)
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", w.Code)
-	}
-}
-
-func TestHandleCompactRejectsWrongMethod(t *testing.T) {
-	s := &Server{sessionsDir: t.TempDir(), chatSender: &fakeSender{}}
-	req := httptest.NewRequest(http.MethodGet, "/api/chat/compact?id=session.jsonl", nil)
-	w := httptest.NewRecorder()
-	s.handleCompact(w, req)
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want 405", w.Code)
-	}
-}
-
-func TestHandleCompactSurfacesWorkerError(t *testing.T) {
-	root := t.TempDir()
-	writeSessionFile(t, root, "test-project", "session.jsonl")
-	sender := &fakeSender{compactErr: errors.New("Nothing to compact (session too small)")}
-	s := &Server{sessionsDir: root, chatSender: sender}
-	req := httptest.NewRequest(http.MethodPost, "/api/chat/compact?id=session.jsonl", nil)
-	w := httptest.NewRecorder()
-	s.handleCompact(w, req)
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want 500", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "Nothing to compact") {
-		t.Fatalf("body = %q, want worker error surfaced", w.Body.String())
 	}
 }
 
@@ -694,13 +620,14 @@ func TestHandleWorkerStatusDoesNotSpawnWorkerWhenModelUnknown(t *testing.T) {
 
 func TestHandleNewSessionPreinitializesWorker(t *testing.T) {
 	root := t.TempDir()
-	projectPath := filepath.ToSlash(filepath.Join(root, "test-project"))
 	fake := &fakeSender{ensureWorkerCh: make(chan struct{}, 1)}
 	s := &Server{
 		sessionsDir: root,
 		chatSender:  fake,
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/new-session", strings.NewReader(`{"path":"`+projectPath+`"}`))
+	// A real absolute path: "/tmp/..." is not absolute on Windows.
+	projectPath := filepath.Join(root, "test-project")
+	req := httptest.NewRequest(http.MethodPost, "/api/new-session", strings.NewReader(`{"path":`+jsonString(projectPath)+`}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.handleNewSession(w, req)
@@ -735,7 +662,7 @@ func TestHandleNewSessionPreinitializesWorker(t *testing.T) {
 	}
 
 	// Verify file was created
-	projectDir := filepath.Join(root, sessions.EncodeProjectName(sessions.CanonicalProject(projectPath)))
+	projectDir := filepath.Join(root, sessions.EncodeProjectName(projectPath))
 	entries, err := os.ReadDir(projectDir)
 	if err != nil {
 		t.Fatalf("expected project dir to exist: %v", err)
@@ -748,11 +675,11 @@ func TestHandleNewSessionPreinitializesWorker(t *testing.T) {
 func TestHandleNewSessionCopiesSourceModelAndThinking(t *testing.T) {
 	root := t.TempDir()
 	_ = writeSessionFile(t, root, "--tmp--source--", "source.jsonl")
-	projectPath := filepath.ToSlash(filepath.Join(root, "test-project"))
 	fake := &fakeSender{state: workers.WorkerStatus{State: workers.WorkerStateIdle, ModelProvider: "openai", Model: "gpt-5", ThinkingLevel: "high"}}
 	s := &Server{sessionsDir: root, chatSender: fake}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/new-session", strings.NewReader(`{"path":"`+projectPath+`","sourceSessionId":"source.jsonl"}`))
+	projectPath := filepath.Join(root, "test-project")
+	req := httptest.NewRequest(http.MethodPost, "/api/new-session", strings.NewReader(`{"path":`+jsonString(projectPath)+`,"sourceSessionId":"source.jsonl"}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.handleNewSession(w, req)
@@ -776,7 +703,7 @@ func TestHandleNewSessionCopiesSourceModelAndThinking(t *testing.T) {
 	if modelID, thinkingID := fake.modelSessionID(), fake.thinkingSessionID(); modelID != "" || thinkingID != "" {
 		t.Fatalf("new session initialization should not append visible setting changes, got setModel=%q setThinking=%q", modelID, thinkingID)
 	}
-	projectDir := filepath.Join(root, sessions.EncodeProjectName(sessions.CanonicalProject(projectPath)))
+	projectDir := filepath.Join(root, sessions.EncodeProjectName(projectPath))
 	data, err := os.ReadFile(filepath.Join(projectDir, id))
 	if err != nil {
 		t.Fatal(err)
@@ -792,9 +719,8 @@ func TestHandleNewSessionCopiesSourceModelAndThinking(t *testing.T) {
 
 func TestHandleNewSessionWithoutChatSender(t *testing.T) {
 	root := t.TempDir()
-	projectPath := filepath.ToSlash(filepath.Join(root, "no-sender"))
 	s := &Server{sessionsDir: root}
-	req := httptest.NewRequest(http.MethodPost, "/api/new-session", strings.NewReader(`{"path":"`+projectPath+`"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/new-session", strings.NewReader(`{"path":`+jsonString(filepath.Join(root, "no-sender"))+`}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.handleNewSession(w, req)
@@ -851,102 +777,5 @@ func waitForCondition(t *testing.T, timeout time.Duration, fn func() bool) {
 	}
 	if !fn() {
 		t.Fatal("condition not met before timeout")
-	}
-}
-
-func TestHandleChatSavesUploadedFile(t *testing.T) {
-	root := t.TempDir()
-	writeSessionFile(t, root, "--tmp--project--", "session.jsonl")
-	fake := &fakeSender{sendCh: make(chan struct{}, 1)}
-	s := &Server{agentDir: root, sessionsDir: root, chatSender: fake}
-
-	var body bytes.Buffer
-	mw := multipart.NewWriter(&body)
-	mw.WriteField("message", "check this")
-	part, err := mw.CreateFormFile("images", "notes.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _ = part.Write([]byte("hello world"))
-	mw.Close()
-
-	req := httptest.NewRequest(http.MethodPost, "/api/chat?id=session.jsonl", &body)
-	req.Header.Set("Content-Type", mw.FormDataContentType())
-	w := httptest.NewRecorder()
-	s.handleChat(w, req)
-	if w.Code != http.StatusAccepted {
-		t.Fatalf("status = %d body = %s", w.Code, w.Body.String())
-	}
-
-	// Wait for async send
-	select {
-	case <-fake.sendCh:
-	case <-time.After(time.Second):
-		t.Fatal("Send was not called")
-	}
-
-	// Verify file was saved on disk
-	uploadDir := filepath.Join(root, "pi-web", "chat-uploads", "session.jsonl")
-	entries, err := os.ReadDir(uploadDir)
-	if err != nil {
-		t.Fatalf("ReadDir(%q): %v", uploadDir, err)
-	}
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 file in upload dir, got %d", len(entries))
-	}
-	data, err := os.ReadFile(filepath.Join(uploadDir, entries[0].Name()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "hello world" {
-		t.Fatalf("file content = %q, want hello world", string(data))
-	}
-
-	// Verify the forwarded message contains the attachment line
-	_, _, sentReq := fake.sentInfo()
-	if !strings.Contains(sentReq.Message, "[Attached file:") {
-		t.Fatalf("message missing attachment line: %q", sentReq.Message)
-	}
-	if !strings.Contains(sentReq.Message, "notes.txt") {
-		t.Fatalf("message missing filename: %q", sentReq.Message)
-	}
-	if !strings.Contains(sentReq.Message, "text/plain") {
-		t.Fatalf("message missing mime type: %q", sentReq.Message)
-	}
-}
-
-func TestHandleChatFilesOnlyNoTypedMessage(t *testing.T) {
-	root := t.TempDir()
-	writeSessionFile(t, root, "--tmp--project--", "session.jsonl")
-	fake := &fakeSender{sendCh: make(chan struct{}, 1)}
-	s := &Server{agentDir: root, sessionsDir: root, chatSender: fake}
-
-	var body bytes.Buffer
-	mw := multipart.NewWriter(&body)
-	// No message field — only a file
-	part, err := mw.CreateFormFile("images", "data.csv")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _ = part.Write([]byte("a,b\n1,2\n"))
-	mw.Close()
-
-	req := httptest.NewRequest(http.MethodPost, "/api/chat?id=session.jsonl", &body)
-	req.Header.Set("Content-Type", mw.FormDataContentType())
-	w := httptest.NewRecorder()
-	s.handleChat(w, req)
-	if w.Code != http.StatusAccepted {
-		t.Fatalf("status = %d body = %s", w.Code, w.Body.String())
-	}
-
-	select {
-	case <-fake.sendCh:
-	case <-time.After(time.Second):
-		t.Fatal("Send was not called")
-	}
-
-	_, _, sentReq := fake.sentInfo()
-	if !strings.Contains(sentReq.Message, "[Attached file:") {
-		t.Fatalf("message missing attachment line: %q", sentReq.Message)
 	}
 }

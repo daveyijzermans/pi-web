@@ -35,6 +35,7 @@
   let showLoading = $state(false);
   let error = $state('');
   let sessionId = $state('');
+  let sessionUUID = $state('');
   let title = $state('Session');
   let payloadBase64 = $state('');
   let scratchpad = $state('');
@@ -69,6 +70,7 @@
         });
         if (!active) return;
         sessionId = state.sessionId;
+        sessionUUID = state.sessionUUID;
         title = state.title;
         document.title = title;
         cwd = state.cwd;
@@ -120,9 +122,14 @@
 </script>
 
 {#if loading}
-  {#if showLoading}<div class="session-loading">{t('session.loading')}</div>{/if}
+  {#if showLoading}
+    <div class="session-loading" role="status" aria-live="polite">
+      <span class="session-loading-spinner" aria-hidden="true"></span>
+      <span class="session-loading-text">{t('session.loading')}</span>
+    </div>
+  {/if}
 {:else if error}
-  <div class="session-loading">
+  <div class="session-loading session-loading--error">
     <h1>{error}</h1>
     <p><a href="/">{t('session.backToSessions')}</a></p>
   </div>
@@ -131,6 +138,7 @@
     {sessionModel}
     {contentRuntime}
     {sessionId}
+    {sessionUUID}
     {title}
     {scratchpad}
     {cwd}

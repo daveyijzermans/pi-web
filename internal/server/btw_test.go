@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"pi-web/internal/sessions"
@@ -92,8 +91,13 @@ func TestHandleNewBtwThenGet(t *testing.T) {
 	dir := t.TempDir()
 	s := &Server{db: db, sessionsDir: dir}
 
-	// Create a new btw session for parent "parent-1".
-	body := bytes.NewBufferString(`{"path":"` + filepath.ToSlash(dir) + `","parent":"parent-1"}`)
+	// Create a new btw session for parent "parent-1". Marshal the body so the
+	// Windows temp path's backslashes stay valid JSON.
+	raw, err := json.Marshal(map[string]string{"path": dir, "parent": "parent-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := bytes.NewBuffer(raw)
 	req := httptest.NewRequest(http.MethodPost, "/api/btw/new", body)
 	w := httptest.NewRecorder()
 	s.handleNewBtw(w, req)

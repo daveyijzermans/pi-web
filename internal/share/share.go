@@ -53,10 +53,10 @@ func FindGh() string {
 }
 
 type Dependencies struct {
-	Runner  Runner
-	Resolve func(id string) (sessions.Session, error)
+	Runner       Runner
+	Resolve      func(id string) (sessions.Session, error)
 	RenderExport func(sessions.Session, string) string
-	FindGh  func() string
+	FindGh       func() string
 }
 
 func Handle(w http.ResponseWriter, r *http.Request, deps Dependencies) {

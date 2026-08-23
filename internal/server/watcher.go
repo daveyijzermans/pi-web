@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -84,10 +85,13 @@ func (s *Server) recordModTime(sessID string, mod time.Time) {
 	if known && mod.After(lastMod) {
 		s.broadcast(sessID, "reload")
 		s.broadcast(globalSessID, "reload")
-		// A content change may be the first user message (or a new turn) that
-		// should get an auto-generated title. Run off this hot path; the call
-		// cheaply bails when titling is disabled or already handled.
-		go s.maybeAutoTitle(sessID)
+		// Only the regular server runs auto-title side effects. Development mode
+		// still broadcasts reloads from the shared session files.
+		if !s.disableBackgroundJobs {
+			s.startTask(func(ctx context.Context) {
+				s.maybeAutoTitleContext(ctx, sessID)
+			})
+		}
 	}
 	// Always recompute status for this session — the running state depends
 	// on the live mtime regardless of whether reload was emitted (e.g. the

@@ -632,7 +632,13 @@ func sessionHeaderKey(raw map[string]any) string {
 // It handles both the new escape-based encoding (using _ as sentinel) and
 // the legacy encoding (where - stood for /).
 func cleanProjectName(dirName string) string {
-	return CanonicalProject(DecodeProjectName(dirName))
+	s := strings.TrimPrefix(dirName, "--")
+	s = strings.TrimSuffix(s, "--")
+	if win, ok := decodeWindowsBody(s); ok {
+		return win
+	}
+	s = decodeProjectBody(s)
+	return s
 }
 
 // CanonicalProject normalizes a filesystem path for use as a project key.
@@ -648,56 +654,75 @@ func CanonicalProject(path string) string {
 	return p
 }
 
+// decodeWindowsBody reverses the Windows dash encoding (see
+// EncodeProjectName): both : and \ became -, so a drive letter is always
+// followed by two dashes. C--Users-me → C:\Users\me. Paths with literal
+// hyphens decode wrongly, exactly like the legacy Unix encoding; callers
+// recover via the session-header cwd (see resolveLocation).
+func decodeWindowsBody(s string) (string, bool) {
+	if len(s) >= 3 && s[1] == '-' && s[2] == '-' &&
+		(('A' <= s[0] && s[0] <= 'Z') || ('a' <= s[0] && s[0] <= 'z')) {
+		return s[:1] + `:\` + strings.ReplaceAll(s[3:], "-", `\`), true
+	}
+	return "", false
+}
+
 // EncodeProjectName converts an absolute filesystem path into a safe
 // directory name.  It matches pi's encoding so that sessions created by
 // pi-web are discoverable by pi --resume and vice versa.
 //
-// Algorithm (matches session-manager.js in pi):
+
+//	/home/user/my-project → --home_-user_-my-project--
+//	/home/user/_cache    → --home_-user_-__cache--
 //
-//  1. Strip leading / or \
+// Windows-shaped paths (drive letter or backslashes) instead mirror pi's own
+// encoding (dist/core/session-manager.js: strip one leading separator, then
+// map every /, \ and : to -), because the escape-based scheme would leave
+// : and \ in the name — both invalid in Windows directory names.
 //
-//  2. Replace / \ : with -
+//	C:\Users\me\proj → --C--Users-me-proj--
 //
-//  3. Wrap in --
-//
-//     /home/user/my-project → --home-user-my-project--
-//     H:\Software           → --H--Software--
+// Algorithm mirrors pi's session-manager.js.
 func EncodeProjectName(path string) string {
 	s := strings.TrimSpace(path)
-	s = strings.TrimLeft(s, `/\`)
-	s = strings.ReplaceAll(s, `/`, `-`)
-	s = strings.ReplaceAll(s, `\`, `-`)
-	s = strings.ReplaceAll(s, `:`, `-`)
+	if isWindowsPath(s) {
+		if len(s) > 0 && (s[0] == '/' || s[0] == '\\') {
+			s = s[1:]
+		}
+		s = strings.NewReplacer("/", "-", `\`, "-", ":", "-").Replace(s)
+		return "--" + s + "--"
+	}
+	s = strings.Trim(s, "/")
+	// Escape _ first, then /.  Order matters: we must double _ before we
+	// introduce any new _ in the / escape sequence.
+	s = strings.ReplaceAll(s, "_", "__")
+	s = strings.ReplaceAll(s, "/", "_-")
 	return "--" + s + "--"
 }
 
-// DecodeProjectName reverses EncodeProjectName.  It accepts the
-// pi-compatible simple encoding, the old escape-based encoding,
-// and the legacy encoding (where - meant /) so that existing
-// session directories continue to work.
+// isWindowsPath reports whether path is Windows-shaped: a drive letter
+// ("C:...") or any backslash separator. Keying off the path's shape rather
+// than runtime.GOOS keeps the encoding deterministic and testable everywhere.
+func isWindowsPath(path string) bool {
+	if len(path) >= 2 && path[1] == ':' &&
+		(('A' <= path[0] && path[0] <= 'Z') || ('a' <= path[0] && path[0] <= 'z')) {
+		return true
+	}
+	return strings.Contains(path, `\`)
+}
+
+// DecodeProjectName reverses EncodeProjectName.  It accepts both the
+// new escape-based encoding and the legacy encoding (where - meant /)
+// so that existing session directories continue to work.
 func DecodeProjectName(dirName string) string {
 	s := strings.TrimPrefix(dirName, "--")
 	s = strings.TrimSuffix(s, "--")
+	if win, ok := decodeWindowsBody(s); ok {
+		return win
+	}
 	s = decodeProjectBody(s)
-	if s == "" {
-		return s
-	}
-	// Normalize backslashes to forward slashes so old-format decodes
-	// (H:\Software) match new-format decodes (H:/Software).
-	s = strings.ReplaceAll(s, "\\", "/")
-	// Handle Windows drive paths: after simple decoding, H:\Software
-	// becomes H//Software (drive letter + two slashes from : and \).
-	// Convert to proper forward-slash form.
-	if len(s) >= 3 && s[1] == '/' && s[2] == '/' &&
-		(s[0] >= 'A' && s[0] <= 'Z' || s[0] >= 'a' && s[0] <= 'z') {
-		// e.g. "H//Software" → "H:/Software"
-		s = string(s[0]) + ":/" + strings.TrimLeft(s[3:], "/")
-		return s
-	}
-	if !strings.HasPrefix(s, "/") {
-		if !isWindowsDrivePath(s) {
-			s = "/" + s
-		}
+	if s != "" && !strings.HasPrefix(s, "/") {
+		s = "/" + s
 	}
 	return s
 }
@@ -717,21 +742,12 @@ func isWindowsDrivePath(s string) bool {
 // To distinguish old escape format from pi-compatible format, we check
 // whether all _ characters are part of known escape sequences.
 func decodeProjectBody(s string) string {
-	if isOldEscapeFormat(s) {
-		// Old escape-based encoding.  Decode in reverse order of encoding
-		// (longest/most specific sequences first to avoid partial matches).
-		s = strings.ReplaceAll(s, "_as_", "*")
-		s = strings.ReplaceAll(s, "_qu_", "?")
-		s = strings.ReplaceAll(s, "_pi_", "|")
-		s = strings.ReplaceAll(s, "_dq_", "\"")
-		s = strings.ReplaceAll(s, "_gt_", ">")
-		s = strings.ReplaceAll(s, "_lt_", "<")
-		s = strings.ReplaceAll(s, "_co_", ":")
-		s = strings.ReplaceAll(s, "_bs_", "\\")
+	if strings.Contains(s, "_") {
+		// New escape-based encoding.  Order: unescape / first, then _.
 		s = strings.ReplaceAll(s, "_-", "/")
 		s = strings.ReplaceAll(s, "__", "_")
 	} else {
-		// Pi-compatible or legacy: - means /
+		// Legacy encoding: every - was a /.
 		s = strings.ReplaceAll(s, "-", "/")
 	}
 	return s

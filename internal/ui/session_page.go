@@ -13,6 +13,7 @@ import (
 
 // share-session.html renders the static export/share snapshot only; the live
 // session page is the Svelte SPA served via the app.html shell.
+//
 //go:embed embedded/share-session.html
 var exportSessionHtml string
 

@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"net/http"
 	"os"
 
@@ -236,8 +235,7 @@ func (s *Server) handleNewBtw(w http.ResponseWriter, r *http.Request) {
 		Path   string `json:"path"`
 		Parent string `json:"parent"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	path := body.Path
@@ -256,7 +254,9 @@ func (s *Server) handleNewBtw(w http.ResponseWriter, r *http.Request) {
 	// handleNewSession.
 	if s.chatSender != nil {
 		if resolved, err := sessions.ResolveByID(s.sessionsDir, id); err == nil {
-			go s.initializeNewSessionWorker(context.Background(), resolved.Session.ID, resolved.Path, sessions.InitialSettings{})
+			s.startTask(func(ctx context.Context) {
+				s.initializeNewSessionWorker(ctx, resolved.Session.ID, resolved.Path, sessions.InitialSettings{})
+			})
 		}
 	}
 

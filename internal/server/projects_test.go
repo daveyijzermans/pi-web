@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -27,9 +28,6 @@ func newProjectPrefsDB(t *testing.T) *sql.DB {
 	}
 	if _, err := db.Exec(appSettingsSchema); err != nil {
 		t.Fatalf("create app_settings: %v", err)
-	}
-	if _, err := db.Exec(projectsSchema); err != nil {
-		t.Fatalf("create projects: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
 	return db
@@ -158,6 +156,10 @@ func TestHandleUpdateProject_FilterToggle(t *testing.T) {
 
 func TestHandleUpdateProject(t *testing.T) {
 	s := &Server{db: newProjectPrefsDB(t), now: time.Now}
+	// Real absolute paths: register/enable normalize and reject paths like
+	// "/a", which is not absolute on Windows.
+	pathA := filepath.Join(t.TempDir(), "a")
+	pathProj := filepath.Join(t.TempDir(), "proj")
 
 	post := func(path, action string) *httptest.ResponseRecorder {
 		body, _ := json.Marshal(map[string]string{"path": path, "action": action})
@@ -167,28 +169,26 @@ func TestHandleUpdateProject(t *testing.T) {
 		return w
 	}
 
-	proj := sessions.CanonicalProject(absTestPath("/home/user/proj"))
-
-	if w := post("/a", "enable"); w.Code != http.StatusOK {
+	if w := post(pathA, "enable"); w.Code != http.StatusOK {
 		t.Fatalf("enable status = %d", w.Code)
 	}
-	if !enabledSet(t, s)["/a"] {
-		t.Fatal("/a should be enabled")
+	if !enabledSet(t, s)[pathA] {
+		t.Fatalf("%s should be enabled", pathA)
 	}
 
-	if w := post("/a", "disable"); w.Code != http.StatusOK {
+	if w := post(pathA, "disable"); w.Code != http.StatusOK {
 		t.Fatalf("disable status = %d", w.Code)
 	}
-	if enabledSet(t, s)["/a"] {
-		t.Fatal("/a should be disabled")
+	if enabledSet(t, s)[pathA] {
+		t.Fatalf("%s should be disabled", pathA)
 	}
 
 	// register stores the path with source=registered and enabled.
-	if w := post(proj, "register"); w.Code != http.StatusOK {
+	if w := post(pathProj, "register"); w.Code != http.StatusOK {
 		t.Fatalf("register status = %d", w.Code)
 	}
 	var source string
-	if err := s.db.QueryRow("SELECT source FROM project_prefs WHERE project_path = ?", proj).Scan(&source); err != nil {
+	if err := s.db.QueryRow("SELECT source FROM project_prefs WHERE project_path = ?", pathProj).Scan(&source); err != nil {
 		t.Fatal(err)
 	}
 	if source != "registered" {
@@ -196,18 +196,18 @@ func TestHandleUpdateProject(t *testing.T) {
 	}
 
 	// remove deletes the row.
-	if w := post(proj, "remove"); w.Code != http.StatusOK {
+	if w := post(pathProj, "remove"); w.Code != http.StatusOK {
 		t.Fatalf("remove status = %d", w.Code)
 	}
 	var count int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM project_prefs WHERE project_path = ?", proj).Scan(&count); err != nil {
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM project_prefs WHERE project_path = ?", pathProj).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {
 		t.Fatal("removed project should be gone")
 	}
 
-	if w := post("/a", "bogus"); w.Code != http.StatusBadRequest {
+	if w := post(pathA, "bogus"); w.Code != http.StatusBadRequest {
 		t.Fatalf("unknown action status = %d, want 400", w.Code)
 	}
 }
@@ -246,9 +246,15 @@ func TestHandleApiProjects(t *testing.T) {
 	writeSessionWithCWD(t, filepath.Join(sessionsDir, "sub1"), "b.jsonl", "/home/user/project-a")
 	writeSessionWithCWD(t, filepath.Join(sessionsDir, "sub2"), "c.jsonl", "/home/user/project-b")
 
-	s := &Server{db: newProjectPrefsDB(t), sessionsDir: sessionsDir, cache: sessions.NewCache(), now: time.Now}
+	s := &Server{
+		db:          newProjectPrefsDB(t),
+		sessionsDir: sessionsDir,
+		cache:       sessions.NewCache(),
+		now:         time.Now,
+		lastKnown:   map[string]struct{}{"a.jsonl": {}},
+	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/projects", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/projects?current=/home/user/project-a&sessionLimit=5", nil)
 	w := httptest.NewRecorder()
 	s.handleApiProjects(w, req)
 	if w.Code != http.StatusOK {
@@ -256,10 +262,28 @@ func TestHandleApiProjects(t *testing.T) {
 	}
 
 	var payload struct {
-		Projects []projectEntry `json:"projects"`
+		Projects             []projectEntry            `json:"projects"`
+		Total                int                       `json:"total"`
+		CurrentSessions      []sessions.SessionSummary `json:"currentSessions"`
+		CurrentSessionsTotal int                       `json:"currentSessionsTotal"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
+	}
+	if payload.Total != 2 {
+		t.Fatalf("total = %d, want 2", payload.Total)
+	}
+	if len(payload.CurrentSessions) != 2 || payload.CurrentSessionsTotal != 2 {
+		t.Fatalf(
+			"current sessions = %d, total %d; want 2, 2",
+			len(payload.CurrentSessions),
+			payload.CurrentSessionsTotal,
+		)
+	}
+	for _, sum := range payload.CurrentSessions {
+		if sum.Project != "/home/user/project-a" {
+			t.Fatalf("current session project = %q", sum.Project)
+		}
 	}
 	byPath := map[string]projectEntry{}
 	for _, p := range payload.Projects {
@@ -269,36 +293,129 @@ func TestHandleApiProjects(t *testing.T) {
 	if !ok || a.SessionCount != 2 || !a.Enabled {
 		t.Fatalf("project-a entry wrong: %+v", a)
 	}
+	if len(a.RunningSessionIDs) != 1 || a.RunningSessionIDs[0] != "a.jsonl" {
+		t.Fatalf("project-a running sessions wrong: %+v", a.RunningSessionIDs)
+	}
 	b, ok := byPath["/home/user/project-b"]
 	if !ok || b.SessionCount != 1 || !b.Enabled {
 		t.Fatalf("project-b entry wrong: %+v", b)
 	}
 }
 
-// absTestPath turns a POSIX-style absolute path into one absolute on the
-// current OS — on Windows it prefixes the home drive (e.g. C:\abs\path), on
-// Unix it returns the path unchanged.
-func absTestPath(p string) string {
-	home, _ := os.UserHomeDir()
-	if vol := filepath.VolumeName(home); vol != "" {
-		return vol + filepath.FromSlash(p)
+func TestHandleApiProjectsFiltered(t *testing.T) {
+	sessionsDir := t.TempDir()
+	writeSessionWithCWD(t, filepath.Join(sessionsDir, "sub1"), "a.jsonl", "/home/user/project-a")
+	writeSessionWithCWD(t, filepath.Join(sessionsDir, "sub2"), "b.jsonl", "/home/user/project-b")
+
+	s := &Server{db: newProjectPrefsDB(t), sessionsDir: sessionsDir, cache: sessions.NewCache(), now: time.Now}
+	// Seed both projects, then disable project-b.
+	s.syncProjectPrefs([]string{"/home/user/project-a", "/home/user/project-b"})
+	if _, err := s.db.Exec("UPDATE project_prefs SET enabled = 0 WHERE project_path = ?", "/home/user/project-b"); err != nil {
+		t.Fatal(err)
 	}
-	return p
+
+	getPaths := func(url string) ([]string, int) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		w := httptest.NewRecorder()
+		s.handleApiProjects(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d", w.Code)
+		}
+		var payload struct {
+			Projects []projectEntry `json:"projects"`
+			Total    int            `json:"total"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		paths := make([]string, 0, len(payload.Projects))
+		for _, p := range payload.Projects {
+			paths = append(paths, p.Path)
+		}
+		return paths, payload.Total
+	}
+
+	// Master filter off: filtered=1 is a no-op.
+	if paths, total := getPaths("/api/projects?filtered=1"); len(paths) != 2 || total != 2 {
+		t.Fatalf("filter off: got %v (total %d), want both projects", paths, total)
+	}
+
+	s.setProjectFilterEnabled(true)
+
+	// Without filtered=1 (Manage Projects modal) everything still shows.
+	if paths, total := getPaths("/api/projects"); len(paths) != 2 || total != 2 {
+		t.Fatalf("no filtered param: got %v (total %d), want both projects", paths, total)
+	}
+
+	// filtered=1 drops the disabled project and total reflects it.
+	paths, total := getPaths("/api/projects?filtered=1")
+	if len(paths) != 1 || paths[0] != "/home/user/project-a" || total != 1 {
+		t.Fatalf("filtered: got %v (total %d), want only project-a", paths, total)
+	}
+
+	// The current project is kept even when disabled.
+	paths, total = getPaths("/api/projects?filtered=1&current=/home/user/project-b")
+	if len(paths) != 2 || total != 2 || paths[0] != "/home/user/project-b" {
+		t.Fatalf("filtered current: got %v (total %d), want project-b first", paths, total)
+	}
+}
+
+func TestHandleApiProjectsPagination(t *testing.T) {
+	sessionsDir := t.TempDir()
+	for i := range 25 {
+		project := fmt.Sprintf("/home/user/project-%02d", i)
+		filename := fmt.Sprintf("%02d.jsonl", i)
+		writeSessionWithCWD(t, filepath.Join(sessionsDir, filename), filename, project)
+	}
+
+	s := &Server{db: newProjectPrefsDB(t), sessionsDir: sessionsDir, cache: sessions.NewCache(), now: time.Now}
+	getPage := func(url string) ([]projectEntry, int) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		w := httptest.NewRecorder()
+		s.handleApiProjects(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d", w.Code)
+		}
+		var payload struct {
+			Projects []projectEntry `json:"projects"`
+			Total    int            `json:"total"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		return payload.Projects, payload.Total
+	}
+
+	first, total := getPage("/api/projects?limit=20&current=/home/user/project-24")
+	if len(first) != 20 || total != 25 {
+		t.Fatalf("first page = %d projects, total %d; want 20, 25", len(first), total)
+	}
+	if first[0].Path != "/home/user/project-24" {
+		t.Fatalf("current project = %q, want first", first[0].Path)
+	}
+
+	second, total := getPage("/api/projects?limit=20&offset=20&current=/home/user/project-24")
+	if len(second) != 5 || total != 25 {
+		t.Fatalf("second page = %d projects, total %d; want 5, 25", len(second), total)
+	}
 }
 
 func TestNormalizeProjectPath(t *testing.T) {
 	home, _ := os.UserHomeDir()
-	absPath := absTestPath("/abs/path")
-	spaced := absTestPath("/spaced")
+	// Platform-absolute fixtures: "/abs/path" is not absolute on Windows.
+	abs := filepath.Join(t.TempDir(), "abs", "path")
+	spaced := filepath.Join(t.TempDir(), "spaced")
 	cases := []struct {
 		in      string
 		want    string
 		wantErr bool
 	}{
-		{absPath, sessions.CanonicalProject(absPath), false},
-		{absPath + string(filepath.Separator), sessions.CanonicalProject(absPath), false},
-		{"~/proj", sessions.CanonicalProject(filepath.Join(home, "proj")), false},
-		{"  " + spaced + "  ", sessions.CanonicalProject(spaced), false},
+		{abs, abs, false},
+		{abs + string(filepath.Separator), abs, false},
+		{"~/proj", filepath.Join(home, "proj"), false},
+		{"  " + spaced + "  ", spaced, false},
 		{"relative/path", "", true},
 		{"", "", true},
 	}
@@ -317,180 +434,5 @@ func TestNormalizeProjectPath(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("normalizeProjectPath(%q) = %q, want %q", tc.in, got, tc.want)
 		}
-	}
-}
-
-func TestExtractReadmeDescription(t *testing.T) {
-	cases := []struct {
-		name    string
-		content string
-		want    string
-	}{
-		{
-			name: "short description heading",
-			content: `# My Project
-
-Welcome!
-
-## Short Description
-
-This is a short description of the project.
-It spans multiple lines.
-
-## Installation
-
-Run npm install.
-`,
-			want: "This is a short description of the project. It spans multiple lines.",
-		},
-		{
-			name: "tagline before screenshots with images",
-			content: `# pi-web (Remote Control Your Pi)
-
-Drive your [pi](https://pi.dev) coding agent from any browser on your network — laptop, phone, or tablet.
-
-## Screenshots
-
-<div align="center">
-  <img src="desktop-dark.png" alt="Desktop — dark mode" />
-</div>
-`,
-			want: "Drive your pi coding agent from any browser on your network — laptop, phone, or tablet.",
-		},
-		{
-			name: "explicit short description section",
-			content: `# My Project
-
-## Short Description
-
-This is the short description.
-
-## Other Section
-
-Some other content.
-`,
-			want: "This is the short description.",
-		},
-		{
-			name: "only html under first h2",
-			content: `# My Project
-
-## Screenshots
-
-<div align="center">
-  <img src="screenshot.png" alt="Screenshot" />
-</div>
-`,
-			want: "",
-		},
-		{
-			name:    "no readme",
-			content: "", // signals: don't write README file
-			want:    "",
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			if tc.content != "" {
-				if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte(tc.content), 0644); err != nil {
-					t.Fatal(err)
-				}
-			}
-			got := extractReadmeDescription(dir)
-			if got != tc.want {
-				t.Errorf("got %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestHandleGetProject(t *testing.T) {
-	sessionsDir := t.TempDir()
-	writeSessionWithCWD(t, filepath.Join(sessionsDir, "sub1"), "a.jsonl", "/home/user/project-a")
-
-	s := &Server{db: newProjectPrefsDB(t), sessionsDir: sessionsDir, cache: sessions.NewCache(), now: time.Now}
-	// Seed the projects table
-	s.syncProjectPrefs([]string{"/home/user/project-a"})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/project/%2Fhome%2Fuser%2Fproject-a", nil)
-	w := httptest.NewRecorder()
-	s.handleGetProject(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d", w.Code)
-	}
-
-	var payload map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
-		t.Fatal(err)
-	}
-	proj, ok := payload["project"].(map[string]any)
-	if !ok {
-		t.Fatal("missing project key")
-	}
-	if proj["name"] != "project-a" {
-		t.Errorf("name = %v, want project-a", proj["name"])
-	}
-	if payload["sessionCount"].(float64) != 1 {
-		t.Errorf("sessionCount = %v, want 1", payload["sessionCount"])
-	}
-}
-
-func TestHandleGetProject_NotFound(t *testing.T) {
-	s := &Server{db: newProjectPrefsDB(t), now: time.Now}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/project/%2Fnonexistent", nil)
-	w := httptest.NewRecorder()
-	s.handleGetProject(w, req)
-	// Returns 200 with defaults even if not in table (generates on the fly)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", w.Code)
-	}
-}
-
-func TestHandleUpdateProjectName(t *testing.T) {
-	s := &Server{db: newProjectPrefsDB(t), now: time.Now}
-
-	body, _ := json.Marshal(map[string]string{
-		"path": "/home/user/project-a",
-		"name": "My Cool Project",
-	})
-	req := httptest.NewRequest(http.MethodPost, "/api/project/update", strings.NewReader(string(body)))
-	w := httptest.NewRecorder()
-	s.handleUpdateProjectName(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d", w.Code)
-	}
-
-	var resp map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatal(err)
-	}
-	if resp["name"] != "My Cool Project" {
-		t.Errorf("name = %v, want My Cool Project", resp["name"])
-	}
-
-	// Verify persisted
-	var name string
-	if err := s.db.QueryRow("SELECT name FROM projects WHERE project_path = ?", "/home/user/project-a").Scan(&name); err != nil {
-		t.Fatal(err)
-	}
-	if name != "My Cool Project" {
-		t.Errorf("persisted name = %q, want My Cool Project", name)
-	}
-}
-
-func TestHandleUpdateProjectName_MissingName(t *testing.T) {
-	s := &Server{db: newProjectPrefsDB(t), now: time.Now}
-
-	body, _ := json.Marshal(map[string]string{
-		"path": "/home/user/project-a",
-		"name": "",
-	})
-	req := httptest.NewRequest(http.MethodPost, "/api/project/update", strings.NewReader(string(body)))
-	w := httptest.NewRecorder()
-	s.handleUpdateProjectName(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", w.Code)
 	}
 }

@@ -19,7 +19,9 @@ func TestAuthDisabledPassesThrough(t *testing.T) {
 		t.Fatal("expected Enabled()=false when token empty")
 	}
 	rec := httptest.NewRecorder()
-	a.Wrap(okHandler)(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	// Loopback host: with the merged upstream host-check, tokenless requests
+	// must still originate from an allowed (loopback) host.
+	a.Wrap(okHandler)(rec, httptest.NewRequest(http.MethodGet, "http://127.0.0.1:31415/", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
@@ -406,5 +408,140 @@ func TestWrapQueryTokenProducesSignedCookie(t *testing.T) {
 	// The cookie value must be a valid signed cookie
 	if !validAuthCookie("secret", found.Value, a.now()) {
 		t.Fatal("cookie value must pass validAuthCookie")
+	}
+}
+
+// ── Ported from upstream: additional tests ──
+
+func TestAuthSetsSecureCookieForForwardedHTTPS(t *testing.T) {
+	a := New("secret")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/?token=secret", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	a.Wrap(okHandler)(rec, req)
+	var found *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == TokenCookieName {
+			found = c
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected %s cookie to be set", TokenCookieName)
+	}
+	if !found.Secure {
+		t.Fatal("expected Secure cookie when forwarded proto is https")
+	}
+}
+
+func TestAuthRejectsCrossOriginMutationWhenTokenDisabled(t *testing.T) {
+	a := New("")
+	called := false
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:31415/api/update", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	a.Wrap(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	})(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+	if called {
+		t.Fatal("handler must not run for a cross-origin mutation")
+	}
+}
+
+func TestAuthRejectsSameHostMutationFromDifferentPort(t *testing.T) {
+	a := New("")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:31415/api/update", nil)
+	req.Header.Set("Origin", "http://127.0.0.1:8080")
+	a.Wrap(okHandler)(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestAuthAllowsSameOriginMutationWhenTokenDisabled(t *testing.T) {
+	a := New("")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:31415/api/update", nil)
+	req.Header.Set("Origin", "http://127.0.0.1:31415")
+	a.Wrap(okHandler)(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestAuthAllowsMutationWithoutBrowserOrigin(t *testing.T) {
+	a := New("")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:31415/api/update", nil)
+	a.Wrap(okHandler)(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestAuthRejectsCrossSiteFetchWithoutOrigin(t *testing.T) {
+	a := New("")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:31415/api/update", nil)
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	a.Wrap(okHandler)(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestAuthDoesNotApplyOriginCheckToSafeMethods(t *testing.T) {
+	a := New("")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:31415/api/version", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	a.Wrap(okHandler)(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestAuthRejectsUnknownHostWhenTokenDisabled(t *testing.T) {
+	a := New("")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://attacker.example/api/sessions", nil)
+	a.Wrap(okHandler)(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestAuthAllowsConfiguredHostWhenTokenDisabled(t *testing.T) {
+	a := New("")
+	a.AllowHost("https://pi-host.tailnet.example")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "https://pi-host.tailnet.example/api/sessions", nil)
+	a.Wrap(okHandler)(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestAuthAllowsUnknownHostWhenExplicitlyConfigured(t *testing.T) {
+	a := New("")
+	a.AllowAnyHost()
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://lan-host.example/api/sessions", nil)
+	a.Wrap(okHandler)(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 }

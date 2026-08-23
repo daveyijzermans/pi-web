@@ -80,8 +80,7 @@ func (s *Server) handleApiForkSession(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		EntryID string `json:"entryId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	if body.EntryID == "" {
@@ -102,7 +101,9 @@ func (s *Server) handleApiForkSession(w http.ResponseWriter, r *http.Request) {
 
 	if s.chatSender != nil {
 		if resolved, err := sessions.ResolveByID(s.sessionsDir, id); err == nil {
-			go s.initializeNewSessionWorker(context.Background(), resolved.Session.ID, resolved.Path, sessions.InitialSettings{})
+			s.startTask(func(ctx context.Context) {
+				s.initializeNewSessionWorker(ctx, resolved.Session.ID, resolved.Path, sessions.InitialSettings{})
+			})
 		}
 	}
 
@@ -117,8 +118,7 @@ func (s *Server) handleApiCloneSession(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		LeafID string `json:"leafId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 
@@ -150,7 +150,9 @@ func (s *Server) handleApiCloneSession(w http.ResponseWriter, r *http.Request) {
 
 	if s.chatSender != nil {
 		if resolved, err := sessions.ResolveByID(s.sessionsDir, id); err == nil {
-			go s.initializeNewSessionWorker(context.Background(), resolved.Session.ID, resolved.Path, sessions.InitialSettings{})
+			s.startTask(func(ctx context.Context) {
+				s.initializeNewSessionWorker(ctx, resolved.Session.ID, resolved.Path, sessions.InitialSettings{})
+			})
 		}
 	}
 
@@ -163,8 +165,10 @@ func (s *Server) handleApiSessions(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.reapOrphanedReviewComments(summaries)
 
-	project := r.URL.Query().Get("project")
+	q := r.URL.Query()
+	project := q.Get("project")
 	if project != "" {
 		filtered := make([]sessions.SessionSummary, 0, len(summaries))
 		for _, sum := range summaries {
@@ -177,9 +181,58 @@ func (s *Server) handleApiSessions(w http.ResponseWriter, r *http.Request) {
 		summaries = s.filterEnabledSummaries(summaries)
 	}
 	summaries = s.filterBtwSummaries(summaries)
+
+	if query := strings.TrimSpace(q.Get("q")); query != "" {
+		summaries = filterSummariesByQuery(summaries, query)
+	}
+
 	sessions.SortSummariesByActivity(summaries)
 
-	writeJSON(w, 0, map[string]any{"sessions": summaries})
+	total := len(summaries)
+	summaries = paginateSummaries(summaries, q.Get("offset"), q.Get("limit"))
+
+	writeJSON(w, 0, map[string]any{"sessions": summaries, "total": total})
+}
+
+// filterSummariesByQuery keeps summaries whose name, project, model, or UUID
+// contains query (case-insensitive). Mirrors the frontend sessionSearchText so
+// the command palette and the browse feed match on the same fields.
+func filterSummariesByQuery(summaries []sessions.SessionSummary, query string) []sessions.SessionSummary {
+	q := strings.ToLower(query)
+	out := make([]sessions.SessionSummary, 0, len(summaries))
+	for _, sum := range summaries {
+		model := sum.Model
+		if sum.ModelProvider != "" && sum.Model != "" {
+			model = sum.ModelProvider + "/" + sum.Model
+		}
+		haystack := strings.ToLower(strings.Join([]string{sum.Name, sum.Project, model, sum.SessionUUID}, " "))
+		if strings.Contains(haystack, q) {
+			out = append(out, sum)
+		}
+	}
+	return out
+}
+
+// paginateSummaries returns summaries[offset:offset+limit] when limit parses as
+// a positive int. A missing or invalid limit returns the full slice so existing
+// callers (and the export) keep receiving every session.
+func paginateSummaries(summaries []sessions.SessionSummary, offsetStr, limitStr string) []sessions.SessionSummary {
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		return summaries
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+	if offset >= len(summaries) {
+		return []sessions.SessionSummary{}
+	}
+	end := offset + limit
+	if end > len(summaries) {
+		end = len(summaries)
+	}
+	return summaries[offset:end]
 }
 
 func (s *Server) handleApiSession(w http.ResponseWriter, r *http.Request) {
@@ -290,8 +343,7 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 		Path            string `json:"path"`
 		SourceSessionID string `json:"sourceSessionId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	if body.Path == "" {
@@ -312,7 +364,9 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 	// current model and thinking level onto the new worker.
 	if s.chatSender != nil {
 		if resolved, err := sessions.ResolveByID(s.sessionsDir, id); err == nil {
-			go s.initializeNewSessionWorker(context.Background(), resolved.Session.ID, resolved.Path, settings)
+			s.startTask(func(ctx context.Context) {
+				s.initializeNewSessionWorker(ctx, resolved.Session.ID, resolved.Path, settings)
+			})
 		}
 	}
 
@@ -327,8 +381,7 @@ func (s *Server) handleRenameSession(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name string `json:"name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	name := strings.TrimSpace(body.Name)
@@ -404,7 +457,6 @@ func (s *Server) handleArchiveSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 0, map[string]any{"ok": true, "archived": body.Archived})
 }
 
-
 func (s *Server) handleLabelSessionEntry(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -414,8 +466,7 @@ func (s *Server) handleLabelSessionEntry(w http.ResponseWriter, r *http.Request)
 		EntryID string `json:"entryId"`
 		Label   string `json:"label"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	entryID := strings.TrimSpace(body.EntryID)

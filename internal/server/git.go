@@ -106,3 +106,34 @@ func (s *Server) handleGitDirtyFiles(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 0, map[string]any{"files": files})
 }
 
+func (s *Server) handleGitRenameBranch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var body struct {
+		Name string `json:"name"`
+	}
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	_, cwd, err := s.resolveSessionCwd(r.URL.Query().Get("id"))
+	if resolveOrWriteError(w, err) {
+		return
+	}
+	branch, err := git.RenameBranch(cwd, body.Name)
+	if err != nil {
+		switch {
+		case errors.Is(err, git.ErrInvalidBranchName):
+			writeJSONError(w, http.StatusBadRequest, "invalid branch name")
+		case errors.Is(err, git.ErrDefaultBranch):
+			writeJSONError(w, http.StatusBadRequest, "refusing to rename the default branch")
+		case errors.Is(err, git.ErrNotRepo):
+			writeJSONError(w, http.StatusBadRequest, "not a git repository")
+		default:
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+		}
+		return
+	}
+	writeJSON(w, 0, map[string]any{"ok": true, "branch": branch})
+}

@@ -1,3 +1,5 @@
+import { matchesAction } from '../../../shared/keybindings.js';
+
 export function setupTextareaControls({
   windowImpl = window,
   textarea,
@@ -53,16 +55,16 @@ export function setupTextareaControls({
   const onKeydown = (event) => {
     if (getSlashSelector()?.handleKeydown?.(event)) return;
     if (getMentionSelector()?.handleKeydown?.(event)) return;
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       if (isMobileTextInputMode()) return;
       event.preventDefault();
       form?.requestSubmit?.();
     }
-    if (event.key === 'Tab' && event.shiftKey) {
+    if (matchesAction('cycle-thinking-level', event)) {
       event.preventDefault();
       getThinkingSelector()?.cycle?.();
     }
-    if (event.ctrlKey && (event.key.toLowerCase() === 'i' || event.key.toLowerCase() === 'l')) {
+    if (matchesAction('open-model-selector', event)) {
       event.preventDefault();
       getModelSelector()?.open?.();
     }

@@ -69,11 +69,16 @@ func newHarness(t *testing.T, ttl time.Duration) *harness {
 		return fw, nil
 	}, ttl)
 
+	// Allow any host: the integration client dials the httptest server with a
+	// non-loopback Host header, which the merged upstream host-check would
+	// otherwise reject with 403 "unrecognized host".
+	testAuth := auth.New("")
+	testAuth.AllowAnyHost()
 	var err error
 	srv, err = server.New(server.Deps{
 		AgentDir:            agentDir,
 		SessionsDir:         sessionsDir,
-		Auth:                auth.New(""),
+		Auth:                testAuth,
 		ChatSender:          manager,
 		Cache:               sessions.NewCache(),
 		RenderExportSession: func(s sessions.Session, theme string) string { return "" },
@@ -166,9 +171,9 @@ func waitForBody(t *testing.T, rec *syncRecorder, want string) {
 
 // sseSubscriber drives an SSE connection via HTTP and collects events.
 type sseSubscriber struct {
-	rec   *syncRecorder
+	rec    *syncRecorder
 	cancel context.CancelFunc
-	done  chan struct{}
+	done   chan struct{}
 }
 
 // subscribeSSE starts an SSE subscriber for the given session topic.

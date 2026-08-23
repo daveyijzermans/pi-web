@@ -123,3 +123,37 @@ export function defaultUpdateProject(path, action) {
 export function defaultArchiveSession(id, archived) {
   return postJSON('/api/archive-session?id=' + encodeURIComponent(id), { archived });
 }
+
+// ── Ported from upstream: date-bucket grouping ──
+
+export const dateBucketOrder = ['today', 'yesterday', 'previous7days', 'previous30days', 'older'];
+
+export function dateBucketFor(ms, now = Date.now()) {
+  if (!Number.isFinite(ms)) return 'older';
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const day = 86400000;
+  const today = startOfToday.getTime();
+  if (ms >= today) return 'today';
+  if (ms >= today - day) return 'yesterday';
+  if (ms >= today - 7 * day) return 'previous7days';
+  if (ms >= today - 30 * day) return 'previous30days';
+  return 'older';
+}
+
+export function groupSessionsByDate(sessions = [], now = Date.now()) {
+  const sorted = [...sessions].sort((a, b) => activityMs(b) - activityMs(a));
+  const byBucket = new Map();
+  for (const session of sorted) {
+    const bucket = dateBucketFor(activityMs(session), now);
+    let group = byBucket.get(bucket);
+    if (!group) {
+      group = { bucket, sessions: [] };
+      byBucket.set(bucket, group);
+    }
+    group.sessions.push(session);
+  }
+  return dateBucketOrder
+    .filter((bucket) => byBucket.has(bucket))
+    .map((bucket) => byBucket.get(bucket));
+}

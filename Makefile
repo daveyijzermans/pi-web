@@ -1,4 +1,4 @@
-.PHONY: build setup frontend-setup go-setup root-setup frontend-build frontend-test frontend-knip frontend-lint frontend-format-check extension-test memory-test go-test install-test vet test check clean dev release-patch release-minor release-major release-beta e2e e2e-setup
+.PHONY: build setup frontend-setup go-setup root-setup frontend-build frontend-test frontend-knip frontend-lint frontend-format-check extension-test memory-test go-test install-test vet test check clean dev docs docs-dev release-patch release-minor release-major release-beta e2e e2e-setup
 
 ifeq ($(OS),Windows_NT)
 BINARY ?= pi-web.exe
@@ -71,11 +71,16 @@ test: frontend-test extension-test memory-test go-test install-test
 check: frontend-lint frontend-format-check frontend-knip frontend-test extension-test memory-test frontend-build go-test install-test vet
 
 dev: frontend-setup go-setup
-	@echo "Starting dev mode (frontend watcher + Go hot-reloader)..."
-	@cd $(WEB_DIR) && npm run dev & \
+	@echo "Starting secondary dev instance at http://127.0.0.1:31416 (frontend watcher + Go hot-reloader)..."
+	@rm -f $(WEB_DIR)/dist/.vite/manifest.json; \
+	cd $(WEB_DIR) && npm run dev & \
 	VITE_PID=$$!; \
 	trap "kill $$VITE_PID 2>/dev/null; exit" INT TERM EXIT; \
-	air
+	until [ -f $(WEB_DIR)/dist/.vite/manifest.json ]; do \
+		kill -0 $$VITE_PID 2>/dev/null || exit 1; \
+		sleep 0.1; \
+	done; \
+	PI_WEB_DEV=1 air
 
 version:
 	@echo $(VERSION)
@@ -91,6 +96,16 @@ e2e: build
 clean:
 	rm -f $(BINARY)
 	rm -rf $(WEB_DIR)/dist
+
+# Docs site (VitePress). Assemble the generated srcDir from user-docs + authored
+# pages, then build/preview. Not part of `make check` — never gates the app.
+docs:
+	python3 scripts/build_site.py
+	cd website && npm install && npm run build
+
+docs-dev:
+	python3 scripts/build_site.py
+	cd website && npm install && npm run dev
 
 # Release helpers — bump package.json, commit, tag, and push.
 # Uses npm version which auto-creates a vX.Y.Z git tag.

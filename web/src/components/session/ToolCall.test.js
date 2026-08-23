@@ -49,6 +49,8 @@ describe('ToolCall', () => {
     expect(opts[0].dataset.answer).toBe('A');
   });
 
+
+
   it('marks multi-select questions as needing submit', () => {
     const call = {
       id: 'q',

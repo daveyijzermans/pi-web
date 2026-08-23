@@ -97,6 +97,7 @@
       showFollowButton,
       incrementPending,
       isFollowing,
+      isAtBottom,
     } = followScroll;
 
     on(windowImpl, 'pi-chat-message-sent', (event) => {
@@ -166,6 +167,7 @@
         updateStats,
         updateTitle,
         isFollowing,
+        isAtBottom,
         scrollAfterLayout,
         incrementPending,
         showFollowButton,

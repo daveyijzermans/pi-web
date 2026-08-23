@@ -45,6 +45,10 @@ func (s *Server) autoTitleModel() string {
 // disabled or already handled, and runs the (slow) model call off the caller's
 // goroutine is the caller's responsibility — invoke it with `go`.
 func (s *Server) maybeAutoTitle(sessID string) {
+	s.maybeAutoTitleContext(context.Background(), sessID)
+}
+
+func (s *Server) maybeAutoTitleContext(ctx context.Context, sessID string) {
 	if sessID == "" || !s.autoTitleEnabled() {
 		return
 	}
@@ -111,7 +115,7 @@ func (s *Server) maybeAutoTitle(sessID string) {
 	if eachTurn && inputs.LastUserText != "" {
 		basis = inputs.LastUserText
 	}
-	title := strings.ToValidUTF8(s.generateTitle(basis), "")
+	title := strings.ToValidUTF8(s.generateTitleContext(ctx, basis), "")
 
 	s.autoTitle.mu.Lock()
 	delete(s.autoTitle.inFlight, sessID)
@@ -137,10 +141,14 @@ func (s *Server) maybeAutoTitle(sessID string) {
 // generateTitle asks the configured model for a concise title, falling back to
 // a local heuristic when the model is unset, errors, or returns nothing usable.
 func (s *Server) generateTitle(firstUserText string) string {
+	return s.generateTitleContext(context.Background(), firstUserText)
+}
+
+func (s *Server) generateTitleContext(ctx context.Context, firstUserText string) string {
 	model := s.autoTitleModel()
 	if model != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), autoTitleTimeout)
-		raw, err := autoTitleGenerate(ctx, rpc.PromptOpts{
+		modelCtx, cancel := context.WithTimeout(ctx, autoTitleTimeout)
+		raw, err := autoTitleGenerate(modelCtx, rpc.PromptOpts{
 			Message:      autoTitlePrompt(firstUserText),
 			Model:        model,
 			SystemPrompt: autoTitleSystemPrompt,

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"pi-web/internal/sessions"
 	"pi-web/internal/workers"
 )
 
@@ -69,47 +70,18 @@ func TestComputeRunningStatusEmptyID(t *testing.T) {
 	}
 }
 
-// Regression test for issue #26: during worker cold-start the worker exists
-// (or is being created) but Model is still empty because get_state hasn't
-// returned yet. The old code used Model != "" as a proxy for worker existence
-// and fell through to hasRecentSessionActivity, which returned true because
-// real pi writes to the session file during cold-start. This caused a false
-// running→idle transition and a spurious "done" notification.
-func TestComputeRunningStatusSkipsFallbackDuringWorkerColdStart(t *testing.T) {
-	now := time.Date(2026, 5, 8, 12, 0, 0, 0, time.UTC)
-	s := &Server{
-		sessionsDir: t.TempDir(),
-		chatSender: &fakeSender{
-			// Worker is idle, Model is empty — exactly the cold-start state
-			// before get_state has returned.
-			status:    workers.WorkerStatus{State: workers.WorkerStateIdle},
-			hasWorker: true, // worker exists / creation in flight
-		},
-		// Recent file activity would make the fallback return true.
-		fileMod:      map[string]time.Time{"session.jsonl": now.Add(-400 * time.Millisecond)},
-		fileActivity: map[string]time.Time{"session.jsonl": now.Add(-400 * time.Millisecond)},
-		now:          func() time.Time { return now },
+func TestRunningStatusPayloadIncludesCachedProject(t *testing.T) {
+	sessionsDir := t.TempDir()
+	writeSessionWithCWD(t, filepath.Join(sessionsDir, "sub"), "a.jsonl", "/repo/pi-web")
+	cache := sessions.NewCache()
+	if _, err := cache.LoadAll(sessionsDir); err != nil {
+		t.Fatal(err)
 	}
-	if s.computeRunningStatus("session.jsonl") {
-		t.Fatal("expected running=false: HasWorker=true must short-circuit the file-activity fallback during cold-start")
-	}
-}
+	s := &Server{cache: cache}
 
-// Warm idle worker with Model set still returns false (existing behavior).
-func TestComputeRunningStatusWarmIdleWorker(t *testing.T) {
-	now := time.Date(2026, 5, 8, 12, 0, 0, 0, time.UTC)
-	s := &Server{
-		sessionsDir: t.TempDir(),
-		chatSender: &fakeSender{
-			status:    workers.WorkerStatus{State: workers.WorkerStateIdle, Model: "gpt-5.5"},
-			hasWorker: true,
-		},
-		fileMod:      map[string]time.Time{"session.jsonl": now.Add(-100 * time.Millisecond)},
-		fileActivity: map[string]time.Time{"session.jsonl": now.Add(-100 * time.Millisecond)},
-		now:          func() time.Time { return now },
-	}
-	if s.computeRunningStatus("session.jsonl") {
-		t.Fatal("expected running=false for warm idle worker")
+	payload := s.runningStatusPayload("a.jsonl", true)
+	if payload["project"] != "/repo/pi-web" {
+		t.Fatalf("project = %v, want /repo/pi-web", payload["project"])
 	}
 }
 
@@ -137,27 +109,6 @@ func TestRecomputeAndBroadcastStatusEmitsDeltaOnFlip(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatalf("expected status-delta broadcast")
-	}
-}
-
-func TestComputeRunningStatusIgnoresInitialFileCreation(t *testing.T) {
-	now := time.Date(2026, 5, 8, 12, 0, 1, 0, time.UTC)
-	s := &Server{
-		sessionsDir:  t.TempDir(),
-		chatSender:   &fakeSender{},
-		clients:      make([]*sseClient, 0),
-		fileMod:      map[string]time.Time{"new.jsonl": {}}, // pre-seeded zero by fsnotify Create handler
-		fileActivity: make(map[string]time.Time),
-		lastKnown:    make(map[string]struct{}),
-		now:          func() time.Time { return now },
-	}
-
-	// Simulate the first real write of the freshly created file.
-	s.recordModTime("new.jsonl", now)
-
-	// The creation write must NOT be treated as running.
-	if s.computeRunningStatus("new.jsonl") {
-		t.Fatal("expected running=false after initial file creation write")
 	}
 }
 

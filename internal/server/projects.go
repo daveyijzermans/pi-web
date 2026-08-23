@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -82,11 +83,12 @@ func (s *Server) setProjectFilterEnabled(enabled bool) {
 }
 
 type projectEntry struct {
-	Path         string `json:"path"`
-	Name         string `json:"name"`
-	Enabled      bool   `json:"enabled"`
-	SessionCount int    `json:"sessionCount"`
-	Source       string `json:"source"`
+	Path              string   `json:"path"`
+	Name              string   `json:"name"`
+	Enabled           bool     `json:"enabled"`
+	SessionCount      int      `json:"sessionCount"`
+	Source            string   `json:"source"`
+	RunningSessionIDs []string `json:"runningSessionIds,omitempty"`
 }
 
 // distinctProjects returns the unique, non-empty project paths in first-seen
@@ -455,10 +457,38 @@ func (s *Server) handleApiProjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	q := r.URL.Query()
+	currentProject := q.Get("current")
+	currentSessionLimit, _ := strconv.Atoi(q.Get("sessionLimit"))
+	currentSessions := make([]sessions.SessionSummary, 0)
+	currentSessionsTotal := 0
+	if currentProject != "" && currentSessionLimit > 0 && (q.Get("offset") == "" || q.Get("offset") == "0") {
+		for _, sum := range s.filterBtwSummaries(summaries) {
+			if sum.Project != currentProject {
+				continue
+			}
+			currentSessionsTotal++
+			if len(currentSessions) < currentSessionLimit {
+				currentSessions = append(currentSessions, sum)
+			}
+		}
+	}
+
+	s.lastKnownMu.Lock()
+	runningSessionIDs := make(map[string]bool, len(s.lastKnown))
+	for id := range s.lastKnown {
+		runningSessionIDs[id] = true
+	}
+	s.lastKnownMu.Unlock()
+
 	counts := make(map[string]int)
+	runningByProject := make(map[string][]string)
 	for _, sum := range summaries {
 		if sum.Project != "" {
 			counts[sum.Project]++
+			if runningSessionIDs[sum.ID] {
+				runningByProject[sum.Project] = append(runningByProject[sum.Project], sum.ID)
+			}
 		}
 	}
 	s.syncProjectPrefs(distinctProjects(summaries))
@@ -520,24 +550,66 @@ func (s *Server) handleApiProjects(w http.ResponseWriter, r *http.Request) {
 			name = filepath.Base(p)
 		}
 		entries = append(entries, projectEntry{
-			Path:         p,
-			Name:         name,
-			Enabled:      en,
-			SessionCount: counts[p],
-			Source:       src,
+			Path:              p,
+			Name:              name,
+			Enabled:           en,
+			SessionCount:      counts[p],
+			Source:            src,
+			RunningSessionIDs: runningByProject[p],
 		})
 	}
+	// filtered=1 applies the Manage Projects allowlist (used by the session
+	// sidebar). The current project is always kept so the project you are in
+	// never disappears; the modal omits the param to keep seeing everything.
+	if q.Get("filtered") == "1" && s.projectFilterEnabled() {
+		kept := make([]projectEntry, 0, len(entries))
+		for _, entry := range entries {
+			if entry.Enabled || entry.Path == currentProject {
+				kept = append(kept, entry)
+			}
+		}
+		entries = kept
+	}
+
 	sort.Slice(entries, func(i, j int) bool {
+		if (entries[i].Path == currentProject) != (entries[j].Path == currentProject) {
+			return entries[i].Path == currentProject
+		}
 		if entries[i].SessionCount != entries[j].SessionCount {
 			return entries[i].SessionCount > entries[j].SessionCount
 		}
 		return entries[i].Path < entries[j].Path
 	})
 
+	total := len(entries)
+	entries = paginateProjectEntries(entries, q.Get("offset"), q.Get("limit"))
+
 	writeJSON(w, 0, map[string]any{
-		"projects":      entries,
-		"filterEnabled": s.projectFilterEnabled(),
+		"projects":             entries,
+		"total":                total,
+		"currentSessions":      currentSessions,
+		"currentSessionsTotal": currentSessionsTotal,
+		"filterEnabled":        s.projectFilterEnabled(),
 	})
+}
+
+func paginateProjectEntries(entries []projectEntry, offsetStr, limitStr string) []projectEntry {
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		return entries
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+	if offset >= len(entries) {
+		return []projectEntry{}
+	}
+	end := offset + limit
+	if end > len(entries) {
+		end = len(entries)
+	}
+	return entries[offset:end]
 }
 
 func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
@@ -549,8 +621,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		Path   string `json:"path"`
 		Action string `json:"action"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid json body")
+	if !decodeJSONBody(w, r, &body) {
 		return
 	}
 	if s.db == nil {
@@ -671,7 +742,7 @@ func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
 	var name, repo, readmeDesc string
 	if err := s.db.QueryRow(
 		"SELECT name, repo, readme_description FROM projects WHERE project_path = ?",
-		path,).Scan(&name, &repo, &readmeDesc); err != nil {
+		path).Scan(&name, &repo, &readmeDesc); err != nil {
 		// Project not in table yet — generate defaults on the fly.
 		name = filepath.Base(path)
 		if _, err := os.Stat(filepath.Join(path, ".git", "config")); err == nil {
@@ -699,9 +770,9 @@ func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, 0, map[string]any{
 		"project": map[string]any{
-			"path":             path,
-			"name":             name,
-			"repo":             repo,
+			"path":              path,
+			"name":              name,
+			"repo":              repo,
 			"readmeDescription": readmeDesc,
 		},
 		"gitInfo":      gitInfo,

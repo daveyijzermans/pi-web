@@ -2,6 +2,7 @@ package workers
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -41,7 +42,7 @@ func (f *fakeChatWorker) Status() WorkerStatus {
 func (f *fakeChatWorker) SetModel(ctx context.Context, provider, modelID string) error { return nil }
 
 func (f *fakeChatWorker) SetThinkingLevel(ctx context.Context, level string) error { return nil }
-func (f *fakeChatWorker) Compact(ctx context.Context) error                       { return nil }
+func (f *fakeChatWorker) Compact(ctx context.Context) error                        { return nil }
 func (f *fakeChatWorker) Abort(ctx context.Context) error                          { return nil }
 
 func (f *fakeChatWorker) GetState(ctx context.Context) (WorkerStatus, error) {
@@ -122,6 +123,48 @@ func TestManagerReportsMissingWorkerIdle(t *testing.T) {
 	status := manager.Status("missing.jsonl")
 	if status.State != WorkerStateIdle {
 		t.Fatalf("status = %q, want idle", status.State)
+	}
+}
+
+func TestManagerStatusReportsRunningWhileSendSpawnsWorker(t *testing.T) {
+	spawnStarted := make(chan struct{})
+	releaseSpawn := make(chan struct{})
+	manager := NewManager(func(string, string) (ChatWorker, error) {
+		close(spawnStarted)
+		<-releaseSpawn
+		return &fakeChatWorker{}, nil
+	})
+	sendDone := make(chan error, 1)
+	go func() {
+		sendDone <- manager.Send(context.Background(), "a.jsonl", "/tmp/a.jsonl", chat.Request{Message: "hi"})
+	}()
+	<-spawnStarted
+	// The worker is still spawning: without the pending-send mark this would
+	// report idle and the queue drainer would dispatch queued items into the
+	// still-starting run.
+	if status := manager.Status("a.jsonl"); status.State != WorkerStateRunning {
+		t.Fatalf("status during worker spawn = %q, want running", status.State)
+	}
+	close(releaseSpawn)
+	if err := <-sendDone; err != nil {
+		t.Fatal(err)
+	}
+	// The worker's own Running status has taken over by the time the pending
+	// mark is released — no observable idle dip.
+	if status := manager.Status("a.jsonl"); status.State != WorkerStateRunning {
+		t.Fatalf("status after prompt ack = %q, want running", status.State)
+	}
+}
+
+func TestManagerStatusIdleAfterFailedSend(t *testing.T) {
+	manager := NewManager(func(string, string) (ChatWorker, error) {
+		return nil, errors.New("spawn failed")
+	})
+	if err := manager.Send(context.Background(), "a.jsonl", "/tmp/a.jsonl", chat.Request{Message: "hi"}); err == nil {
+		t.Fatal("Send should surface the spawn error")
+	}
+	if status := manager.Status("a.jsonl"); status.State != WorkerStateIdle {
+		t.Fatalf("status after failed send = %q, want idle", status.State)
 	}
 }
 
@@ -237,9 +280,9 @@ func (runningReapable) GetState(ctx context.Context) (WorkerStatus, error) {
 	return WorkerStatus{State: WorkerStateRunning}, nil
 }
 func (runningReapable) GetCommands(ctx context.Context) ([]SlashCommand, error) { return nil, nil }
-func (runningReapable) Status() WorkerStatus                  { return WorkerStatus{State: WorkerStateRunning} }
-func (runningReapable) Close() error                          { return nil }
-func (runningReapable) IdleSince(now time.Time) time.Duration { return time.Hour }
+func (runningReapable) Status() WorkerStatus                                    { return WorkerStatus{State: WorkerStateRunning} }
+func (runningReapable) Close() error                                            { return nil }
+func (runningReapable) IdleSince(now time.Time) time.Duration                   { return time.Hour }
 
 type erroredWorker struct{}
 
@@ -266,10 +309,10 @@ type inspectableWorker struct {
 	status    WorkerStatus
 }
 
-func (w *inspectableWorker) Prompt(context.Context, chat.Request) error    { return nil }
+func (w *inspectableWorker) Prompt(context.Context, chat.Request) error     { return nil }
 func (w *inspectableWorker) SetModel(context.Context, string, string) error { return nil }
 func (w *inspectableWorker) SetThinkingLevel(context.Context, string) error { return nil }
-func (w *inspectableWorker) Compact(context.Context) error                 { return nil }
+func (w *inspectableWorker) Compact(context.Context) error                  { return nil }
 func (w *inspectableWorker) Abort(context.Context) error                    { return nil }
 func (w *inspectableWorker) GetState(context.Context) (WorkerStatus, error) { return w.status, nil }
 func (w *inspectableWorker) GetCommands(context.Context) ([]SlashCommand, error) {

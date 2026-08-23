@@ -5,9 +5,12 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"pi-web/internal/ui"
@@ -19,14 +22,18 @@ const (
 )
 
 type Middleware struct {
-	token string
-	now   func() int64
+	token          string
+	now            func() int64
+	allowedHostsMu sync.RWMutex
+	allowedHosts   map[string]struct{}
+	allowAnyHost   bool
 }
 
 func New(token string) *Middleware {
 	return &Middleware{
-		token: strings.TrimSpace(token),
-		now:   func() int64 { return time.Now().Unix() },
+		token:        strings.TrimSpace(token),
+		now:          func() int64 { return time.Now().Unix() },
+		allowedHosts: make(map[string]struct{}),
 	}
 }
 
@@ -62,6 +69,25 @@ func validAuthCookie(token, value string, now int64) bool {
 	return elapsed >= 0 && elapsed <= cookieMaxAgeSeconds
 }
 
+// AllowHost adds a hostname or absolute URL that tokenless requests may use.
+// Loopback IPs and localhost are always allowed.
+func (a *Middleware) AllowHost(hostOrURL string) {
+	host := normalizeHostname(hostOrURL)
+	if host == "" {
+		return
+	}
+	a.allowedHostsMu.Lock()
+	a.allowedHosts[host] = struct{}{}
+	a.allowedHostsMu.Unlock()
+}
+
+// AllowAnyHost preserves the explicitly unsafe --insecure non-loopback mode.
+func (a *Middleware) AllowAnyHost() {
+	a.allowedHostsMu.Lock()
+	a.allowAnyHost = true
+	a.allowedHostsMu.Unlock()
+}
+
 // Wrap returns a handler that enforces the token check when auth is enabled.
 //
 // Token sources (checked in order): for browser POSTs, form body first;
@@ -76,10 +102,20 @@ func validAuthCookie(token, value string, now int64) bool {
 // instead of a bare 401. API clients (no text/html in Accept) still receive
 // a plain 401.
 func (a *Middleware) Wrap(h http.HandlerFunc) http.HandlerFunc {
-	if !a.Enabled() {
-		return h
-	}
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !a.Enabled() && !a.allowsTokenlessHost(r.Host) {
+			http.Error(w, "unrecognized host", http.StatusForbidden)
+			return
+		}
+		if !allowsBrowserOrigin(r) {
+			http.Error(w, "cross-origin request forbidden", http.StatusForbidden)
+			return
+		}
+		if !a.Enabled() {
+			h(w, r)
+			return
+		}
+
 		got := ""
 		fromQuery := false
 		fromPost := false
@@ -150,6 +186,7 @@ func (a *Middleware) Wrap(h http.HandlerFunc) http.HandlerFunc {
 				Value:    signAuthCookie(a.token, a.now()),
 				Path:     "/",
 				HttpOnly: true,
+				Secure:   isTLSRequest(r),
 				SameSite: http.SameSiteLaxMode,
 				MaxAge:   cookieMaxAgeSeconds,
 			})
@@ -165,6 +202,95 @@ func (a *Middleware) Wrap(h http.HandlerFunc) http.HandlerFunc {
 
 		h(w, r)
 	}
+}
+
+func (a *Middleware) allowsTokenlessHost(rawHost string) bool {
+	host := normalizeHostname(rawHost)
+	if host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		return true
+	}
+	a.allowedHostsMu.RLock()
+	if a.allowAnyHost {
+		a.allowedHostsMu.RUnlock()
+		return true
+	}
+	_, ok := a.allowedHosts[host]
+	a.allowedHostsMu.RUnlock()
+	return ok
+}
+
+// isTLSRequest reports whether the request reached the client over HTTPS. The
+// server itself always listens on loopback HTTP, so a direct connection is
+// never TLS; Tailscale Serve terminates TLS and proxies with
+// X-Forwarded-Proto: https, which is the only HTTPS path in practice. Marking
+// the cookie Secure on that path keeps it off any cleartext request to the same
+// host, while leaving plain loopback HTTP (no such header) unaffected.
+func isTLSRequest(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https")
+}
+
+func normalizeHostname(hostOrURL string) string {
+	value := strings.TrimSpace(hostOrURL)
+	if value == "" {
+		return ""
+	}
+	if !strings.Contains(value, "://") {
+		value = "//" + value
+	}
+	u, err := url.Parse(value)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+}
+
+// allowsBrowserOrigin rejects cross-origin browser mutations even when token
+// auth is disabled for localhost. Browsers attach Origin to unsafe requests;
+// non-browser clients such as curl generally do not, so local automation stays
+// compatible. Sec-Fetch-Site covers browser requests that omit Origin.
+func allowsBrowserOrigin(r *http.Request) bool {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	}
+
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return !strings.EqualFold(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")), "cross-site")
+	}
+	if origin == "null" {
+		return false
+	}
+	u, err := url.Parse(origin)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return false
+	}
+	if normalizeHostname(u.Host) != normalizeHostname(r.Host) {
+		return false
+	}
+	originPort := u.Port()
+	requestURL, err := url.Parse("//" + r.Host)
+	if err != nil {
+		return false
+	}
+	requestPort := requestURL.Port()
+	defaultPort := "80"
+	if u.Scheme == "https" {
+		defaultPort = "443"
+	}
+	if originPort == "" {
+		originPort = defaultPort
+	}
+	if requestPort == "" {
+		requestPort = defaultPort
+	}
+	return originPort == requestPort
 }
 
 // cleanURL returns r.URL.Path with query string intact except for "token" and

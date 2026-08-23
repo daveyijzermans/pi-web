@@ -29,6 +29,8 @@ func newTestServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	// Close the server's sqlite handle before TempDir cleanup: Windows cannot
+	// delete a file that is still open.
 	t.Cleanup(s.Shutdown)
 	return s
 }
@@ -108,6 +110,27 @@ func TestCustomThemesPublicWhenAuthEnabled(t *testing.T) {
 	}
 }
 
+func TestDevelopmentModeDisablesAutonomousQueueDrainer(t *testing.T) {
+	dir := t.TempDir()
+	s, err := New(Deps{
+		AgentDir:              dir,
+		SessionsDir:           dir,
+		Auth:                  auth.New(""),
+		Cache:                 sessions.NewCache(),
+		DisableBackgroundJobs: true,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(s.Shutdown)
+	if !s.disableBackgroundJobs {
+		t.Fatal("development server did not retain DisableBackgroundJobs")
+	}
+	if s.queueDrainer != nil {
+		t.Fatal("development server started an autonomous queue drainer")
+	}
+}
+
 func TestShutdownStopsBackgroundGoroutines(t *testing.T) {
 	s := newTestServer(t)
 	done := make(chan struct{})
@@ -126,4 +149,31 @@ func TestShutdownIsIdempotent(t *testing.T) {
 	s := newTestServer(t)
 	s.Shutdown()
 	s.Shutdown() // must not panic
+}
+
+func TestShutdownCancelsAndWaitsForOwnedTasks(t *testing.T) {
+	s := newTestServer(t)
+	taskDone := make(chan struct{})
+	if !s.startTask(func(ctx context.Context) {
+		<-ctx.Done()
+		close(taskDone)
+	}) {
+		t.Fatal("startTask rejected work before shutdown")
+	}
+
+	s.Shutdown()
+
+	select {
+	case <-taskDone:
+	default:
+		t.Fatal("Shutdown returned before the owned task observed cancellation")
+	}
+}
+
+func TestStartTaskRejectsWorkAfterShutdown(t *testing.T) {
+	s := newTestServer(t)
+	s.Shutdown()
+	if s.startTask(func(context.Context) {}) {
+		t.Fatal("startTask accepted work after shutdown")
+	}
 }

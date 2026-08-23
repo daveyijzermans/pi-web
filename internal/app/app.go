@@ -28,6 +28,7 @@ import (
 
 const defaultPort = "31415"
 const tokenEnvVar = "PI_WEB_TOKEN"
+const developmentEnvVar = "PI_WEB_DEV"
 
 // Main runs the pi-web application. version is supplied by cmd/pi-web so
 // release builds can set it with -ldflags "-X main.version=...".
@@ -44,6 +45,7 @@ func Main(version string) {
 		fmt.Println(version)
 		os.Exit(0)
 	}
+	developmentMode := os.Getenv(developmentEnvVar) == "1"
 
 	agentDir := agentdir.Path()
 	if err := seedSoundsDir(agentDir); err != nil {
@@ -67,6 +69,10 @@ func Main(version string) {
 		os.Exit(1)
 	}
 	authMiddleware := auth.New(token)
+	authMiddleware.AllowHost(bindHost)
+	if *insecure {
+		authMiddleware.AllowAnyHost()
+	}
 
 	versionChecker := updater.New(version)
 
@@ -90,9 +96,10 @@ func Main(version string) {
 		Models: func(ctx context.Context) (json.RawMessage, error) {
 			return defaultModelsCache.get(ctx)
 		},
-		Updater:    versionChecker,
-		RunInstall: runInstall,
-		RunRestart: runRestart,
+		Updater:               versionChecker,
+		RunInstall:            runInstall,
+		RunRestart:            runRestart,
+		DisableBackgroundJobs: developmentMode,
 	})
 	if srvErr != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize server: %v\n", srvErr)
@@ -123,13 +130,26 @@ func Main(version string) {
 	url := fmt.Sprintf("http://%s", net.JoinHostPort(bindHost, *port))
 	var tailscaleURL string
 	var tailscaleServe bool
-	if *hostOverride == "" && !*dev {
+	if *hostOverride == "" && !authMiddleware.Enabled() {
+		// Tailscale Serve proxies the tailnet to this loopback server, and its
+		// hostname would be allowlisted for tokenless access below. Without a
+		// token that turns a loopback-only deployment into unauthenticated
+		// tailnet-wide access to the agent, so stay loopback-only instead.
+		// In -dev mode the auth-off posture is intentional, so skip the warning.
+		if !*dev {
+			fmt.Fprintf(os.Stderr,
+				"Tailscale Serve not configured: set %s to publish an HTTPS tailnet endpoint.\n"+
+					"  Without a token, pi-web stays loopback-only so tailnet peers cannot reach the agent unauthenticated.\n",
+				tokenEnvVar)
+		}
+	} else if *hostOverride == "" && !*dev {
 		tsCtx, tsCancel := context.WithTimeout(context.Background(), tailscaleConfigureTimeout)
 		tsURL, tsOk, tsErr := configureTailscaleServe(tsCtx, *port)
 		tsCancel()
 		if tsErr == nil && tsOk {
 			tailscaleURL = tsURL
 			tailscaleServe = true
+			authMiddleware.AllowHost(tsURL)
 		} else if tsErr != nil {
 			if tsCtx.Err() == context.DeadlineExceeded {
 				fmt.Fprintf(os.Stderr, "Tailscale Serve timed out after %s; continuing without it\n", tailscaleConfigureTimeout)
@@ -143,6 +163,9 @@ func Main(version string) {
 		fmt.Printf("Tailscale HTTPS -> %s\n", tailscaleURL)
 	}
 	fmt.Printf("Serving from: %s\n", sessionsDir)
+	if developmentMode {
+		fmt.Println("Development mode: autonomous jobs disabled")
+	}
 	if authMiddleware.Enabled() {
 		fmt.Println("Auth: enabled (set PI_WEB_TOKEN to require token)")
 	} else if *dev {
@@ -151,16 +174,16 @@ func Main(version string) {
 		fmt.Printf("Auth: disabled — set %s to require a token for access.\n", tokenEnvVar)
 	}
 
-	stateFilePath, err := writeStateFile(agentDir, bindHost, *port, tailscaleServe, tailscaleURL)
+	stateFilePath, stateFile, err := writeStateFile(agentDir, developmentMode, bindHost, *port, tailscaleServe, tailscaleURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 	defer func() {
-		if stateFile != nil {
-			_ = stateFile.Close()
-		}
+		// Unlink while this process still owns the lock so an exiting instance
+		// cannot remove a successor's newly written state file.
 		_ = os.Remove(stateFilePath)
+		_ = stateFile.Close()
 	}()
 
 	if *open {

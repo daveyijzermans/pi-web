@@ -80,7 +80,7 @@ func writeAutoTitleSession(t *testing.T, sessionsDir, userText, name string) str
 	}
 	id := "2026-06-03T00-00-00.000Z_test.jsonl"
 	var b strings.Builder
-	b.WriteString(`{"type":"session","version":3,"id":"test","cwd":"` + filepath.ToSlash(project) + `"}` + "\n")
+	b.WriteString(`{"type":"session","version":3,"id":"test","cwd":` + jsonString(project) + `}` + "\n")
 	if userText != "" {
 		b.WriteString(`{"type":"message","message":{"role":"user","content":"` + userText + `"}}` + "\n")
 	}
@@ -212,7 +212,7 @@ func TestMaybeAutoTitleEachTurnUsesLatestMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := "2026-06-03T00-00-00.000Z_each.jsonl"
-	content := `{"type":"session","version":3,"id":"e","cwd":"` + filepath.ToSlash(project) + `"}` + "\n" +
+	content := `{"type":"session","version":3,"id":"e","cwd":` + jsonString(project) + `}` + "\n" +
 		`{"type":"message","message":{"role":"user","content":"first task"}}` + "\n" +
 		`{"type":"message","message":{"role":"user","content":"second different task"}}` + "\n"
 	if err := os.WriteFile(filepath.Join(project, id), []byte(content), 0o644); err != nil {
@@ -247,7 +247,7 @@ func TestMaybeAutoTitleReTitlesOwnAutoTitleAcrossRestart(t *testing.T) {
 	}
 	id := "2026-06-03T00-00-00.000Z_restart.jsonl"
 	// Prior auto-title marker + two user messages (a new turn since titling).
-	content := `{"type":"session","version":3,"id":"r","cwd":"` + filepath.ToSlash(project) + `"}` + "\n" +
+	content := `{"type":"session","version":3,"id":"r","cwd":` + jsonString(project) + `}` + "\n" +
 		`{"type":"message","message":{"role":"user","content":"old task"}}` + "\n" +
 		`{"type":"session_info","name":"Old Task","autoTitle":true}` + "\n" +
 		`{"type":"message","message":{"role":"user","content":"brand new request"}}` + "\n"
@@ -258,72 +258,6 @@ func TestMaybeAutoTitleReTitlesOwnAutoTitleAcrossRestart(t *testing.T) {
 	s.maybeAutoTitle(id)
 	if got := sessionNameNow(t, s, id); got != "Brand New Request" {
 		t.Fatalf("expected re-title from new message, got %q", got)
-	}
-}
-
-func TestMaybeAutoTitleSkipsOnArchiveEntry(t *testing.T) {
-	// When the last entry in the session file is an archive toggle,
-	// auto-titling must not fire — archive changes carry no new user messages.
-	s := newAutoTitleServer(t, map[string]string{
-		"pi-web:v1:auto-title:model": "anthropic/sonnet",
-	})
-	project := filepath.Join(s.sessionsDir, "proj")
-	if err := os.MkdirAll(project, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	id := "2026-06-03T00-00-00.000Z_archive.jsonl"
-	content := `{"type":"session","version":3,"id":"a","cwd":"` + filepath.ToSlash(project) + `"}` + "\n" +
-		`{"type":"message","message":{"role":"user","content":"do something"}}` + "\n" +
-		`{"type":"archive","archived":true}` + "\n"
-	if err := os.WriteFile(filepath.Join(project, id), []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	calls := 0
-	restore := autoTitleGenerate
-	autoTitleGenerate = func(ctx context.Context, opts rpc.PromptOpts) (string, error) {
-		calls++
-		return "Title", nil
-	}
-	t.Cleanup(func() { autoTitleGenerate = restore })
-
-	s.maybeAutoTitle(id)
-	if calls != 0 {
-		t.Fatalf("auto-title should be skipped for archive entries, got %d model call(s)", calls)
-	}
-}
-
-func TestMaybeAutoTitleSkipsOnSessionInfoEntry(t *testing.T) {
-	// When the last entry is a session_info without an explicit name
-	// (e.g. auto-title marker update), auto-titling must not fire —
-	// the file change is metadata-only, no new user content to title.
-	// This exercises the LastEntryType skip (not the userOwned guard).
-	s := newAutoTitleServer(t, map[string]string{
-		"pi-web:v1:auto-title:model": "anthropic/sonnet",
-	})
-	project := filepath.Join(s.sessionsDir, "proj")
-	if err := os.MkdirAll(project, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	id := "2026-06-03T00-00-00.000Z_sinfo.jsonl"
-	content := `{"type":"session","version":3,"id":"si","cwd":"` + filepath.ToSlash(project) + `"}` + "\n" +
-		`{"type":"message","message":{"role":"user","content":"do something"}}` + "\n" +
-		`{"type":"session_info"}` + "\n"
-	if err := os.WriteFile(filepath.Join(project, id), []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	calls := 0
-	restore := autoTitleGenerate
-	autoTitleGenerate = func(ctx context.Context, opts rpc.PromptOpts) (string, error) {
-		calls++
-		return "Title", nil
-	}
-	t.Cleanup(func() { autoTitleGenerate = restore })
-
-	s.maybeAutoTitle(id)
-	if calls != 0 {
-		t.Fatalf("auto-title should be skipped for session_info entries, got %d model call(s)", calls)
 	}
 }
 

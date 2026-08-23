@@ -19,7 +19,7 @@ pi-web/
 │   │   ├── browser.go          # Open the default browser at startup
 │   │   ├── sounds.go           # Seed default notification sounds into the agent dir
 │   │   ├── update.go           # runInstall / runRestart for self-update
-│   │   └── state_file_*.go     # pi-web-state.json + flock helpers
+│   │   └── state_file_*.go     # regular/development state files + flock helpers
 │   ├── frontend/
 │   │   └── assets.go           # Vite manifest parsing + static asset handlers
 │   ├── ui/
@@ -57,6 +57,7 @@ pi-web/
 │   │   ├── chat.go             # Chat, set-model, set-thinking, worker-status, commands handlers
 │   │   ├── new_session.go      # New-session creation logic
 │   │   ├── git.go              # /api/git/info, /api/git/rename-branch handlers
+│   │   ├── diff.go             # /api/git/diff, /api/diff/reviews handlers
 │   │   ├── files.go            # /api/files handler + per-cwd file-walk cache
 │   │   ├── settings.go         # Server-backed user settings (/api/settings) + SPA shell helpers
 │   │   ├── btw.go              # btw scratch-chat registry: get/new + legacy migration (SQLite)
@@ -67,7 +68,9 @@ pi-web/
 │   │   ├── annotations.go      # Per-session review annotations: list/create/delete + SSE snapshot (SQLite)
 │   │   ├── projects.go         # Project visibility prefs: list/toggle/register + index filtering (SQLite)
 │   │   ├── sound.go            # /api/sounds + /sounds/ asset serving
-│   │   ├── push.go             # PushManager: VAPID, subscribe/unsubscribe, NotifyDone
+│   │   ├── push.go             # PushManager: VAPID, subscribe/unsubscribe, NotifyDone, NotifyScheduleDone
+│   │   ├── scheduler.go        # Cron tick loop + fireSchedule runner (creates a session, sends instructions)
+│   │   ├── schedules_api.go    # /api/schedules + /api/schedule(/run|/runs) handlers
 │   │   ├── update.go           # /api/version, check-update, update, restart handlers
 │   │   ├── events.go           # SSE endpoint (/events)
 │   │   ├── sse_format.go       # SSE event framing helper
@@ -81,6 +84,8 @@ pi-web/
 │   │   ├── title.go            # ReadTitleInputs: extract auto-title source text from a session
 │   │   ├── cache.go            # Modtime-aware session cache
 │   │   └── lookup.go           # Resolve session by ID
+│   ├── schedules/
+│   │   └── schedule.go         # Schedule/Run structs, SQLite store, cron next-fire (robfig/cron)
 │   ├── share/
 │   │   └── share.go            # GitHub Gist creation logic
 │   └── workers/
@@ -145,6 +150,9 @@ type Server struct {
 `ChatSender`, plus the optional `Updater`, `RunInstall`, and `RunRestart`. When
 `Updater` is nil the version/update routes are not registered; when
 `RunInstall`/`RunRestart` are nil the corresponding endpoints respond `503`.
+`DisableBackgroundJobs` marks the internal development server: it still watches
+and serves the shared data, but does not run scheduling, queue draining,
+auto-titling, or push-delivery side effects.
 
 On `New`, the server opens (and migrates) a SQLite database at
 `~/.pi/agent/pi-web.sqlite` with six tables: `scratchpads` (per project path),
@@ -268,18 +276,24 @@ type piRPCWorker struct {
 | `/api/files` | GET | `handleApiFiles` | Bounded file listing for @mention autocomplete |
 | `/api/git/info` | GET | `handleGitInfo` | Branch / dirty / PR-URL info for a project |
 | `/api/git/rename-branch` | POST | `handleGitRenameBranch` | Rename the current git branch |
+| `/api/git/diff` | GET | `handleGitDiff` | Uncommitted working-tree diff (tracked + untracked) for the session cwd |
+| `/api/diff/reviews` | GET/POST/DELETE | `handleReviewComments` | Per-session diff review comments for the diff modal (SQLite) |
 | `/api/scratchpad` | GET/POST | `handleGetScratchpad` / `handleSaveScratchpad` | Per-project scratchpad (SQLite) |
 | `/api/annotations` | GET/POST/DELETE | `handleAnnotations` | Per-session review annotations; mutations broadcast an `annotations` SSE snapshot (SQLite) |
 | `/api/settings` | GET/POST | `handleGetSettings` / `handleSaveSettings` | Server-backed user settings (SQLite) |
 | `/api/btw` | GET | `handleGetBtw` | Resolve the btw scratch-chat session for a parent (SQLite) |
 | `/api/btw/new` | POST | `handleNewBtw` | Create a new btw scratch-chat session (SQLite) |
-| `/api/projects` | GET/POST | `handleApiProjects` / `handleUpdateProject` | List projects + filter state; enable/disable/register/remove, bulk enable-all/disable-all, enable-filter/disable-filter (SQLite) |
+| `/api/projects` | GET/POST | `handleApiProjects` / `handleUpdateProject` | List projects + filter state (`limit`/`offset`, optional `current` priority + `sessionLimit` bundled summaries, active session IDs per project, `filtered=1` to apply the enabled-projects allowlist with the current project always kept); enable/disable/register/remove, bulk enable-all/disable-all, enable-filter/disable-filter (SQLite) |
 | `/api/sounds` | GET | `handleApiSounds` | List available notification sounds |
 | `/sounds/` | GET | `handleSounds` | Serve a sound asset (no auth) |
 | `/custom-themes.css` | GET | `handleCustomThemes` | User custom theme CSS |
 | `/api/push/vapid` | GET | `handleVapid` | VAPID public key (when push enabled) |
 | `/api/push/subscribe` | POST | `handleSubscribe` | Register a web-push subscription |
 | `/api/push/unsubscribe` | POST | `handleUnsubscribe` | Remove a web-push subscription |
+| `/api/schedules` | GET/POST | `handleApiSchedules` | List schedules (with `nextRunAt`) / create (SQLite) |
+| `/api/schedule` | GET/POST/PUT/DELETE | `handleApiSchedule` | Read/update/delete one schedule (`?id=`) |
+| `/api/schedule/run` | POST | `handleApiScheduleRun` | Fire a schedule now (`?id=`); returns created `sessionId` |
+| `/api/schedule/runs` | GET | `handleApiScheduleRuns` | Run log for a schedule (`?id=`) |
 | `/api/version` | GET | `handleVersion` | Current/latest version (when updater set) |
 | `/api/check-update` | POST | `handleCheckUpdate` | Force a version check |
 | `/api/update` | POST | `handleUpdate` | Install the latest pi-web |
@@ -296,6 +310,13 @@ PWA / static asset routes (registered outside `Server.Register`):
 
 ```
 Request ──▶ auth.Wrap(handler)
+                │
+                ▼
+      unsafe browser method?
+                │
+       Origin host must match
+       request Host (even when
+       token auth is disabled)
                 │
                 ▼
         token set in env?
@@ -318,6 +339,39 @@ Request ──▶ auth.Wrap(handler)
    ▼         ▼
  handler   401 Unauthorized
 ```
+
+The origin check protects the default tokenless localhost server from blind
+cross-site browser mutations. `GET`, `HEAD`, and `OPTIONS` are unaffected.
+Origin-less clients such as local CLI scripts remain compatible; a browser
+request explicitly marked `Sec-Fetch-Site: cross-site` is rejected even if it
+omits `Origin`. Tokenless requests also require a recognized `Host`: loopback
+hosts are always accepted, and the configured bind host is added to the
+allowlist. This prevents DNS rebinding from turning a same-origin attacker
+hostname into access to the local server. The explicitly dangerous `--insecure`
+mode preserves its documented any-host behavior.
+
+Tailscale Serve is only configured when `PI_WEB_TOKEN` is set. Serve proxies the
+tailnet to the loopback server, so allowlisting its hostname for tokenless access
+would silently widen a loopback-only deployment into unauthenticated tailnet-wide
+access to the agent — defeating the same non-loopback token guard enforced at
+startup. When no token is set, startup skips Serve and stays loopback-only; the
+discovered Tailscale hostname is added to the allowlist only alongside a token.
+
+JSON handlers share `decodeJSONBody`, which caps request bodies at 2 MiB,
+rejects multiple JSON values, and rejects an explicit media type other than
+`application/json`. An omitted `Content-Type` remains valid for CLI
+compatibility. Multipart chat uploads retain their separate 32 MiB total and
+10 MiB-per-image limits.
+
+## Background Work and Shutdown
+
+Side-effecting asynchronous work started by the server—chat dispatch, worker
+prewarming, scheduled runs, queue dispatch, auto-titling, and push
+notifications—is registered through `startTask`. Every task receives the
+server-owned context. Shutdown prevents new tasks, cancels that context, stops
+the long-running watchers/drainers, waits for all accepted work, and only then
+closes SQLite. The service restart trigger is intentionally detached because
+it must outlive the response that initiates shutdown.
 
 ## SSE Broadcasting
 

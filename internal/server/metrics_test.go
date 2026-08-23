@@ -222,7 +222,7 @@ func TestPprofRoutes(t *testing.T) {
 	s.registerPprof(mux)
 
 	// Index lists available profiles.
-	req := httptest.NewRequest(http.MethodGet, "/api/debug/pprof/", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:31415/api/debug/pprof/", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -233,7 +233,7 @@ func TestPprofRoutes(t *testing.T) {
 	}
 
 	// A named profile resolves through the /api-stripped Index handler.
-	req2 := httptest.NewRequest(http.MethodGet, "/api/debug/pprof/heap?debug=1", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:31415/api/debug/pprof/heap?debug=1", nil)
 	w2 := httptest.NewRecorder()
 	mux.ServeHTTP(w2, req2)
 	if w2.Code != http.StatusOK {

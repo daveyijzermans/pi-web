@@ -164,6 +164,8 @@ func TestWalkScopedMaxDepth(t *testing.T) {
 func TestWalkScopedMaxEntries(t *testing.T) {
 	var seed []string
 	for i := 0; i < 30; i++ {
+		// Numeric names: 'a'+i runs past 'z' into characters like '|' that
+		// are invalid in Windows filenames.
 		seed = append(seed, fmt.Sprintf("f%02d.txt", i))
 	}
 	root := seedTree(t, seed...)

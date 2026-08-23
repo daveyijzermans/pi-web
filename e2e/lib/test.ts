@@ -66,4 +66,14 @@ export async function collapseScratchpad(
   });
 }
 
+export async function openSessionOutline(
+  page: import("@playwright/test").Page,
+): Promise<void> {
+  const outlineTab = page.locator(
+    '[role="tab"][aria-controls="sidebar-outline-panel"]',
+  );
+  await outlineTab.dispatchEvent("click");
+  await expect(outlineTab).toHaveAttribute("aria-selected", "true");
+}
+
 export { expect };

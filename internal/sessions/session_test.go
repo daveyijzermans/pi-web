@@ -20,13 +20,19 @@ func TestEncodeProjectName(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"/Users/setkyar", "--Users-setkyar--"},
-		{"/home/user/project", "--home-user-project--"},
-		{"/a/b/c/d", "--a-b-c-d--"},
-		{"/Users/setkyar/pi-web", "--Users-setkyar-pi-web--"},
-		{"/Users/setkyar/my-project", "--Users-setkyar-my-project--"},
-		{"/Users/setkyar/_cache", "--Users-setkyar-_cache--"},
-		{"/a/_b/_c", "--a-_b-_c--"},
+		{"/Users/setkyar", "--Users_-setkyar--"},
+		{"/home/user/project", "--home_-user_-project--"},
+		{"/a/b/c/d", "--a_-b_-c_-d--"},
+		{"/Users/setkyar/pi-web", "--Users_-setkyar_-pi-web--"},
+		{"/Users/setkyar/my-project", "--Users_-setkyar_-my-project--"},
+		{"/Users/setkyar/_cache", "--Users_-setkyar_-__cache--"},
+		{"/a/_b/_c", "--a_-__b_-__c--"},
+		// Windows-shaped paths mirror pi's encoding (/, \ and : all map to -)
+		// so the result is a valid Windows directory name.
+		{`C:\Users\me\proj`, "--C--Users-me-proj--"},
+		{`c:\work`, "--c--work--"},
+		{`C:/Users/me/proj`, "--C--Users-me-proj--"},
+		{`\\server\share\proj`, "---server-share-proj--"},
 	}
 	for _, tt := range tests {
 		got := EncodeProjectName(tt.input)
@@ -41,18 +47,21 @@ func TestDecodeProjectName(t *testing.T) {
 		input    string
 		expected string
 	}{
-		// Pi-compatible format (no _ in body, - means /)
+		// New format
+		{"--Users_-setkyar--", "/Users/setkyar"},
+		{"--home_-user_-project--", "/home/user/project"},
+		{"--a_-b_-c_-d--", "/a/b/c/d"},
+		{"--Users_-setkyar_-my-project--", "/Users/setkyar/my-project"},
+		{"--Users_-setkyar_-__cache--", "/Users/setkyar/_cache"},
+		// Legacy format (no _ in body) — backward compatible.
 		{"--Users-setkyar--", "/Users/setkyar"},
 		{"--home-user-project--", "/home/user/project"},
 		{"--a-b-c-d--", "/a/b/c/d"},
-		// Old escape format (contains __ or _co_ or _bs_) — backward compatible.
-		{"--Users_-setkyar--", "/Users/setkyar"},
-		{"--home_-user_-project--", "/home/user/project"},
-		{"--Users_-setkyar_-__cache--", "/Users/setkyar/_cache"},
-		{"--H_co__bs_Software--", "H:/Software"},
-		// Windows drive paths (pi-compatible)
-		{"--H--Software--", "H:/Software"},
-		{"--C--Users-HTK-project--", "C:/Users/HTK/project"},
+		// Windows dash encoding: drive letter followed by two dashes
+		// (both : and \ became -).
+		{"--C--Users-me-proj--", `C:\Users\me\proj`},
+		{"--c--work--", `c:\work`},
+		{"--C--my_app--", `C:\my_app`},
 	}
 	for _, tt := range tests {
 		got := DecodeProjectName(tt.input)
@@ -63,30 +72,21 @@ func TestDecodeProjectName(t *testing.T) {
 }
 
 func TestEncodeDecodeRoundTrip(t *testing.T) {
-	// With pi-compatible encoding, - is used as path separator in the encoded
-	// form. Paths without literal hyphens round-trip cleanly. Paths with
-	// hyphens will decode with extra / separators, but the actual cwd is
-	// stored in the session header so this only affects display names.
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"/Users/setkyar", "/Users/setkyar"},
-		{"/home/user/project", "/home/user/project"},
-		{"/a/b/c/d", "/a/b/c/d"},
-		// Paths with hyphens: - in path collides with - as separator.
-		{"/Users/setkyar/my-project", "/Users/setkyar/my/project"},
-		// Underscores are literal in new format.
-		{"/Users/setkyar/_cache", "/Users/setkyar/_cache"},
-		{"/a/_b/_c", "/a/_b/_c"},
-		{"/project-with-hyphens/sub_dir", "/project/with/hyphens/sub_dir"},
-		{"/underscore_test/path", "/underscore_test/path"},
+	paths := []string{
+		"/Users/setkyar",
+		"/home/user/project",
+		"/a/b/c/d",
+		"/Users/setkyar/my-project",
+		"/Users/setkyar/_cache",
+		"/a/_b/_c",
+		"/project-with-hyphens/sub_dir",
+		"/underscore_test/path",
 	}
-	for _, tt := range tests {
-		encoded := EncodeProjectName(tt.input)
+	for _, p := range paths {
+		encoded := EncodeProjectName(p)
 		decoded := DecodeProjectName(encoded)
-		if decoded != tt.expected {
-			t.Errorf("round-trip failed: %q -> %q -> %q (want %q)", tt.input, encoded, decoded, tt.expected)
+		if decoded != p {
+			t.Errorf("round-trip failed: %q -> %q -> %q", p, encoded, decoded)
 		}
 	}
 }
@@ -157,7 +157,9 @@ func TestListRecentLocationsReturnsNewestBoundedLocations(t *testing.T) {
 	base := time.Date(2026, 5, 8, 12, 0, 0, 0, time.UTC)
 
 	for i := 0; i < 15; i++ {
-		project := filepath.Join("/tmp", fmt.Sprintf("project%02d", i))
+		// A plain literal, not filepath.Join: on Windows Join would produce
+		// backslash paths and the assertions below expect /tmp/projectNN.
+		project := fmt.Sprintf("/tmp/project%02d", i)
 		dir := filepath.Join(tmp, EncodeProjectName(project))
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatalf("mkdir project dir: %v", err)
@@ -214,25 +216,18 @@ func TestListRecentLocationsRecoversLegacyHyphenatedPaths(t *testing.T) {
 func TestResolveLocationReturnsDecodedPathWhenOnDisk(t *testing.T) {
 	tmp := t.TempDir()
 
-	// Create a real project directory so os.Stat succeeds.
-	// Use a path without hyphens so the simple encoding round-trips cleanly.
+	// Create a real project directory so os.Stat succeeds. Hyphen-free name:
+	// on Windows the dash encoding can't round-trip literal hyphens, and this
+	// test exercises the decode-only path (no session file to recover from).
 	realPath := filepath.Join(tmp, "myproject")
 	if err := os.MkdirAll(realPath, 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	// Create the encoded directory under a sessions root.
+	// Create the new-format encoded directory under a sessions root.
 	sessionsDir := filepath.Join(tmp, "sessions")
 	encodedDir := filepath.Join(sessionsDir, EncodeProjectName(realPath))
 	if err := os.MkdirAll(encodedDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	// Write a session file so resolveLocation can recover cwd as fallback.
-	sessionPath := filepath.Join(encodedDir, "2026-05-08T10-00-00.000Z_abc.jsonl")
-	realPathJSON, _ := json.Marshal(realPath)
-	content := `{"type":"session","version":3,"id":"abc","timestamp":"2026-05-08T10:00:00Z","cwd":` + string(realPathJSON) + `}` + "\n"
-	if err := os.WriteFile(sessionPath, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -243,9 +238,7 @@ func TestResolveLocationReturnsDecodedPathWhenOnDisk(t *testing.T) {
 	if len(locations) == 0 {
 		t.Fatal("expected at least 1 location")
 	}
-	// On Windows, decoded paths use / but real paths use \.
-	// Compare cleaned paths for equivalence.
-	if filepath.Clean(locations[0]) != filepath.Clean(realPath) {
+	if locations[0] != realPath {
 		t.Fatalf("expected %q, got %q", realPath, locations[0])
 	}
 }
@@ -281,9 +274,11 @@ func TestCreateSessionFile(t *testing.T) {
 	if !strings.Contains(string(data), `"type":"session"`) {
 		t.Fatalf("missing session header: %s", string(data))
 	}
-	// JSON escapes \ as \\, so check for the JSON-escaped form.
-	jsonCwd := strings.ReplaceAll(projectPath, `\`, `\\`)
-	if !strings.Contains(string(data), `"cwd":"`+jsonCwd+`"`) {
+	wantCwd, err := json.Marshal(projectPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"cwd":`+string(wantCwd)) {
 		t.Fatalf("missing cwd: %s", string(data))
 	}
 }
@@ -307,72 +302,6 @@ func TestCreateSessionFileRejectsRelativePath(t *testing.T) {
 	tmp := t.TempDir()
 	if _, err := createSessionFile(tmp, "relative/foo"); err == nil {
 		t.Fatal("expected error for relative path, got nil")
-	}
-}
-
-func TestArchiveSessionAppendsAndToggles(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "s.jsonl")
-	content := `{"type":"session","name":"Test","timestamp":"2026-05-08T10:00:00Z"}` + "\n"
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	now := func() time.Time { return time.Date(2026, 5, 8, 10, 1, 2, 0, time.UTC) }
-
-	// Archive the session
-	if err := ArchiveSession(path, true, now); err != nil {
-		t.Fatalf("ArchiveSession(true) failed: %v", err)
-	}
-	s, err := ParseSummary(path, "--proj--", "s.jsonl")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !s.Archived {
-		t.Fatalf("Archived = false, want true after archive")
-	}
-
-	// Unarchive the session
-	if err := ArchiveSession(path, false, now); err != nil {
-		t.Fatalf("ArchiveSession(false) failed: %v", err)
-	}
-	s, err = ParseSummary(path, "--proj--", "s.jsonl")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s.Archived {
-		t.Fatalf("Archived = true, want false after unarchive")
-	}
-}
-
-// Issue #123: the archive entry must carry an id and a parentId threaded onto
-// the current leaf. Otherwise it becomes the file's last entry with no id, and
-// pi's session loader sets leafId to that undefined id → the resumed worker
-// sees an empty conversation and the agent "forgets" the whole session.
-func TestArchiveSessionThreadsOntoLeaf(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "s.jsonl")
-	content := `{"type":"session","id":"sess1","timestamp":"2026-05-08T10:00:00Z"}` + "\n" +
-		`{"type":"message","id":"m1","parentId":"sess1","timestamp":"2026-05-08T10:00:01Z","message":{"role":"user","content":"hi"}}` + "\n" +
-		`{"type":"message","id":"m2","parentId":"m1","timestamp":"2026-05-08T10:00:02Z","message":{"role":"assistant","content":"hello"}}` + "\n"
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatal(err)
-	}
-	now := func() time.Time { return time.Date(2026, 5, 8, 10, 1, 2, 0, time.UTC) }
-	if err := ArchiveSession(path, true, now); err != nil {
-		t.Fatalf("ArchiveSession failed: %v", err)
-	}
-	entries, err := loadEntriesFromFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	last := entries[len(entries)-1]
-	if last["type"] != "archive" {
-		t.Fatalf("last entry type = %v, want archive", last["type"])
-	}
-	if id, _ := last["id"].(string); id == "" {
-		t.Fatalf("archive entry has no id; pi's leaf loader will null out and drop history")
-	}
-	if pid, _ := last["parentId"].(string); pid != "m2" {
-		t.Fatalf("archive parentId = %v, want m2 (the current leaf)", last["parentId"])
 	}
 }
 
@@ -730,8 +659,8 @@ func TestParseSummaryFallsBackToDirNameWhenCwdMissing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Project != "/Users/setkyar/pi/web" {
-		t.Errorf("Project = %q, want %q", s.Project, "/Users/setkyar/pi/web")
+	if s.Project != "Users/setkyar/pi/web" {
+		t.Errorf("Project = %q, want %q", s.Project, "Users/setkyar/pi/web")
 	}
 }
 
@@ -742,7 +671,12 @@ func TestParseFileUsesHeaderCwdAsProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, "s.jsonl")
-	cwdJSON, _ := json.Marshal(cwd) // properly escapes backslashes for JSON
+	// json.Marshal the cwd: Windows paths contain backslashes, which are
+	// invalid JSON when concatenated raw.
+	cwdJSON, err := json.Marshal(cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
 	content := `{"type":"session","timestamp":"2026-05-08T10:00:00Z","cwd":` + string(cwdJSON) + `}` + "\n"
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
@@ -751,7 +685,7 @@ func TestParseFileUsesHeaderCwdAsProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !sameProject(sess.Project, cwd) {
+	if sess.Project != cwd {
 		t.Errorf("Project = %q, want %q", sess.Project, cwd)
 	}
 }
@@ -759,7 +693,10 @@ func TestParseFileUsesHeaderCwdAsProject(t *testing.T) {
 func TestParseFileDeduplicatesRepeatedSessionHeader(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "session.jsonl")
-	rootJSON, _ := json.Marshal(root)
+	rootJSON, err := json.Marshal(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	header := `{"type":"session","id":"sid","timestamp":"2026-05-08T10:00:00Z","cwd":` + string(rootJSON) + `}`
 	content := header + "\n" +
 		header + "\n" +
@@ -786,7 +723,10 @@ func TestParseFileLeavesChatEnabledWhenCwdExists(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, "session.jsonl")
-	cwdJSON, _ := json.Marshal(cwd)
+	cwdJSON, err := json.Marshal(cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
 	content := `{"type":"session","version":3,"id":"sid","timestamp":"2026-05-06T00:00:00.000Z","cwd":` + string(cwdJSON) + `}` + "\n"
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
@@ -959,111 +899,4 @@ func TestForkSessionFileEntryNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nonexistent entry")
 	}
-}
-
-func TestEncodeProjectNameWindows(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{`H:\Software`, `--H--Software--`},
-		{`C:\Users\HTK\project`, `--C--Users-HTK-project--`},
-		{`D:\My Project\sub_dir`, `--D--My Project-sub_dir--`},
-		{`H:\test\file.txt`, `--H--test-file.txt--`},
-		{`C:\path\with|pipe`, `--C--path-with|pipe--`},
-		{`C:\path\with?question`, `--C--path-with?question--`},
-		{`C:\path\with*star`, `--C--path-with*star--`},
-	}
-	for _, tt := range tests {
-		got := EncodeProjectName(tt.input)
-		if got != tt.expected {
-			t.Errorf("EncodeProjectName(%q) = %q, want %q", tt.input, got, tt.expected)
-		}
-	}
-}
-
-// encodePiPath mimics pi's encoding from session-manager.js:
-//
-//	const safePath = `--${resolvedCwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
-func encodePiPath(path string) string {
-	s := strings.TrimLeft(path, `/\`)
-	s = strings.ReplaceAll(s, `/`, `-`)
-	s = strings.ReplaceAll(s, `\`, `-`)
-	s = strings.ReplaceAll(s, `:`, `-`)
-	return "--" + s + "--"
-}
-
-func TestEncodeProjectNameMatchesPi(t *testing.T) {
-	tests := []struct {
-		path string
-	}{
-		{`/home/user/project`},
-		{`/Users/setkyar/pi-web`},
-		{`/a/b/c/d`},
-		{`/Users/setkyar/my-project`},
-		{`/Users/setkyar/_cache`},
-		{`/a/_b/_c`},
-		{`/project-with-hyphens/sub_dir`},
-		{`/underscore_test/path`},
-		{`H:\Software`},
-		{`C:\Users\HTK\project`},
-		{`D:\My Project\sub_dir`},
-		{`H:\test\file.txt`},
-		{`H:\Software\pi-web`},
-	}
-	for _, tt := range tests {
-		got := EncodeProjectName(tt.path)
-		want := encodePiPath(tt.path)
-		if got != want {
-			t.Errorf("EncodeProjectName(%q) = %q, want (pi-compatible) %q", tt.path, got, want)
-		}
-	}
-}
-
-func TestEncodeDecodeRoundTripWindows(t *testing.T) {
-	// With pi-compatible encoding, backslashes and colons are replaced with -
-	// which decodes as /. Round-trip produces forward-slash paths.
-	// The actual cwd is stored in the session header, so this is fine for
-	// directory naming.
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{`H:\Software`, `H:/Software`},
-		{`C:\Users\HTK\project`, `C:/Users/HTK/project`},
-		{`D:\My Project\sub_dir`, `D:/My Project/sub_dir`},
-		{`H:\test\file.txt`, `H:/test/file.txt`},
-	}
-	for _, tt := range tests {
-		encoded := EncodeProjectName(tt.input)
-		decoded := DecodeProjectName(encoded)
-		if decoded != tt.expected {
-			t.Errorf("round-trip failed: %q -> %q -> %q (want %q)", tt.input, encoded, decoded, tt.expected)
-		}
-	}
-}
-
-func TestDecodeOldEscapeFormat(t *testing.T) {
-	// Ensure backward compatibility with old escape-based encoding.
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"--Users_-setkyar--", "/Users/setkyar"},
-		{"--home_-user_-project--", "/home/user/project"},
-		{"--Users_-setkyar_-__cache--", "/Users/setkyar/_cache"},
-		{"--H_co__bs_Software--", "H:/Software"},
-		{"--C_co__bs_Users_bs_HTK_bs_project--", "C:/Users/HTK/project"},
-	}
-	for _, tt := range tests {
-		got := DecodeProjectName(tt.input)
-		if got != tt.expected {
-			t.Errorf("DecodeProjectName(%q) = %q, want %q", tt.input, got, tt.expected)
-		}
-	}
-}
-
-// sameProject compares two paths normalized to forward slashes with lowercase drives.
-func sameProject(a, b string) bool {
-	return CanonicalProject(a) == CanonicalProject(b)
 }

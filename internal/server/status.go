@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 
 	"pi-web/internal/workers"
@@ -42,6 +43,11 @@ func (s *Server) computeRunningStatus(sessionID string) bool {
 
 func (s *Server) runningStatusPayload(sessionID string, running bool) map[string]any {
 	payload := map[string]any{"id": sessionID, "running": running}
+	if s.cache != nil {
+		if project, ok := s.cache.ProjectForID(sessionID); ok && project != "" {
+			payload["project"] = project
+		}
+	}
 	if !running || s.chatSender == nil {
 		return payload
 	}
@@ -90,8 +96,24 @@ func (s *Server) recomputeAndBroadcastStatus(sessionID string) {
 
 	// Transition running → idle: fire a push notification so subscribed
 	// clients learn the response is ready even when the tab is closed
-	// or the device is locked.
-	if was && !now && s.push != nil {
-		go s.push.NotifyDone(sessionID)
+	// or the device is locked. Scheduled runs get a schedule-specific push
+	// (shown even in the foreground) instead of the generic one.
+	if was && !now && s.push != nil && !s.disableBackgroundJobs {
+		if name, ok := s.scheduleNameForSession(sessionID); ok {
+			s.startTask(func(context.Context) {
+				s.push.NotifyScheduleDone(name, sessionID)
+			})
+		} else {
+			s.startTask(func(context.Context) {
+				s.push.NotifyDone(sessionID)
+			})
+		}
+	}
+
+	// Transition running → idle is also the cue for the autonomous queue
+	// drainer: if items are waiting, dispatch the next one now instead of
+	// waiting for the 5-second tick.
+	if was && !now && s.queueDrainer != nil {
+		s.queueDrainer.kick(sessionID)
 	}
 }
