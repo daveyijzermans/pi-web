@@ -96,8 +96,14 @@ export function filterSessions(sessions = [], query = '') {
   return sessions.filter((session) => sessionSearchText(session).toLowerCase().includes(q));
 }
 
-export function defaultFetchSessions() {
-  return getJSON('/api/sessions');
+export function defaultFetchSessions({ limit, offset, query, project } = {}) {
+  const params = new URLSearchParams();
+  if (Number.isFinite(limit) && limit > 0) params.set('limit', String(limit));
+  if (Number.isFinite(offset) && offset > 0) params.set('offset', String(offset));
+  if (query) params.set('q', query);
+  if (project) params.set('project', project);
+  const qs = params.toString();
+  return getJSON('/api/sessions' + (qs ? '?' + qs : ''));
 }
 export function defaultFetchRecent() {
   return getJSON('/api/recent-locations');
@@ -114,8 +120,23 @@ export function defaultFetchDrives() {
 export function defaultCreateSession(path) {
   return postJSON('/api/new-session', { path });
 }
-export function defaultFetchProjects() {
-  return getJSON('/api/projects');
+export function defaultFetchProjects({
+  limit,
+  offset,
+  currentProject,
+  currentSessionLimit,
+  filtered,
+} = {}) {
+  const params = new URLSearchParams();
+  if (Number.isFinite(limit) && limit > 0) params.set('limit', String(limit));
+  if (Number.isFinite(offset) && offset > 0) params.set('offset', String(offset));
+  if (currentProject) params.set('current', currentProject);
+  if (Number.isFinite(currentSessionLimit) && currentSessionLimit > 0) {
+    params.set('sessionLimit', String(currentSessionLimit));
+  }
+  if (filtered) params.set('filtered', '1');
+  const qs = params.toString();
+  return getJSON('/api/projects' + (qs ? '?' + qs : ''));
 }
 export function defaultUpdateProject(path, action) {
   return postJSON('/api/projects', { path, action });
