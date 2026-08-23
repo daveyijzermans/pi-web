@@ -3,7 +3,8 @@ import { JSDOM } from 'jsdom';
 import { setupSessionUi } from './session-ui-runner.js';
 import * as searchFiltersApi from './search-filters.js';
 import * as sidebarApi from './sidebar.js';
-import { resetSessionRuntime } from '../session-runtime.js';
+import * as toggleStateApi from './toggle-state.js';
+import { sessionRuntime, resetSessionRuntime } from '../session-runtime.js';
 
 afterEach(() => resetSessionRuntime());
 
@@ -27,6 +28,7 @@ describe('session UI runner', () => {
       markdownApi,
       searchFiltersApi,
       sidebarApi,
+      toggleStateApi,
       getLeafId: () => 'leaf',
       setSearchQuery: vi.fn(),
       setFilterMode: vi.fn(),
@@ -35,6 +37,8 @@ describe('session UI runner', () => {
     });
     expect(markdownApi.configureSessionMarkdown).toHaveBeenCalled();
     expect(result.safeMarkedParse('x')).toBe('<p>x</p>');
+    expect(sessionRuntime.toggleState).toBeTruthy();
+    expect(typeof result.attachHeaderHandlers).toBe('function');
   });
 
   it('applies desktop sidebar collapsed state on init', () => {
@@ -56,6 +60,7 @@ describe('session UI runner', () => {
       markdownApi,
       searchFiltersApi,
       sidebarApi,
+      toggleStateApi,
       getLeafId: () => 'leaf',
       setSearchQuery: vi.fn(),
       setFilterMode: vi.fn(),

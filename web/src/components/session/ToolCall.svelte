@@ -44,6 +44,7 @@
 
 <!-- eslint-disable svelte/no-at-html-tags -- trusted: Lucide icon SVG and rendered session markdown -->
 
+<div class="tool-call-collapsed">Tool: {call.name} ...</div>
 <div class="tool-execution {statusClass}" id={resultEntry ? `entry-${resultEntry.id}` : undefined}>
   {#if call.name === 'bash'}
     {@const command = str(args.command)}

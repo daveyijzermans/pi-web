@@ -7,7 +7,6 @@
   // imperative layer still owns. Shared by the live app + the static export.
   import { getSessionModel } from '../../session/session-context.js';
   import SessionEntry from './SessionEntry.svelte';
-  import ToolDetail from './ToolDetail.svelte';
 
   let { model = getSessionModel(), afterRender = null, live = false } = $props();
 
@@ -15,7 +14,7 @@
 
   // Re-run post-render side effects whenever the rendered path changes.
   $effect(() => {
-    model.groupedPath;
+    model.activePath;
     if (containerEl && typeof afterRender === 'function') {
       afterRender(containerEl);
     }
@@ -23,8 +22,7 @@
 </script>
 
 <div id="messages-list" class="messages-list" bind:this={containerEl}>
-  {#each model.groupedPath as entry (entry.id)}
+  {#each model.activePath as entry (entry.id)}
     <SessionEntry {entry} {model} {live} />
   {/each}
 </div>
-<ToolDetail />

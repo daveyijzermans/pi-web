@@ -1,3 +1,5 @@
+import { matchesAction } from '../../shared/keybindings.js';
+
 export function setupSessionSearchAndFilters({
   documentImpl = document,
   getLeafId,
@@ -50,6 +52,9 @@ export function isEditableTarget(element) {
 export function setupSessionKeyboardShortcuts({
   documentImpl = document,
   clearSearch,
+  toggleThinking,
+  toggleToolsVisibility,
+  toggleToolOutputs,
   isEditableTargetImpl = isEditableTarget,
 } = {}) {
   documentImpl.addEventListener('keydown', (e) => {
@@ -59,6 +64,21 @@ export function setupSessionKeyboardShortcuts({
         return;
       }
       clearSearch();
+    }
+
+    if (isEditableTargetImpl(documentImpl.activeElement)) {
+      return;
+    }
+
+    if (matchesAction('toggle-thinking', e)) {
+      e.preventDefault();
+      toggleThinking();
+    } else if (matchesAction('toggle-tools', e)) {
+      e.preventDefault();
+      toggleToolsVisibility();
+    } else if (matchesAction('toggle-tool-outputs', e)) {
+      e.preventDefault();
+      toggleToolOutputs();
     }
   });
 }

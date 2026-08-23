@@ -97,7 +97,7 @@
 
 <div id="sidebar-overlay"></div>
 <div id="app">
-  <SessionTree {sessionId} />
+  <SessionTree {sessionId} {cwd} />
   <div id="content-container" class="content-container">
     <main id="content">
       <div id="header-container"><SessionInfoHeader model={sessionModel} /></div>

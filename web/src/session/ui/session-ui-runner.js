@@ -4,12 +4,14 @@ export function setupSessionUi({
   documentImpl = document,
   windowImpl = window,
   storage = localStorage,
+  sessionId = '',
   marked,
   hljs,
   escapeHtml,
   markdownApi,
   searchFiltersApi,
   sidebarApi,
+  toggleStateApi,
   getLeafId,
   setSearchQuery,
   setFilterMode,
@@ -45,15 +47,34 @@ export function setupSessionUi({
     );
   }
 
+  const toggleController = toggleStateApi.createToggleController({
+    documentImpl,
+    storage,
+    sessionId,
+  });
+  // Registered so the message-pane afterRender hook (live content-runtime +
+  // export-entry) can re-apply persisted collapse/toggle state to new nodes.
+  sessionRuntime.toggleState = toggleController;
+
+  const attachHeaderHandlers = () => toggleController.attachHeaderHandlers();
+  const toggleThinking = () => toggleController.toggleThinking();
+  const toggleToolsVisibility = () => toggleController.toggleToolsVisibility();
+  const toggleToolOutputs = () => toggleController.toggleToolOutputs();
+
   searchFiltersApi.setupSessionKeyboardShortcuts({
     documentImpl,
     clearSearch: () => searchFilterControls.clearAndNavigateBottom(),
+    toggleThinking,
+    toggleToolsVisibility,
+    toggleToolOutputs,
   });
 
   return {
     safeMarkedParse,
     isMobileLayout,
     closeSidebar,
+    attachHeaderHandlers,
+    toggleController,
     // The right-sidebar chrome (scratchpad/resize/tabs) lives in <RightSidebar>,
     // which registers its controls in sessionRuntime.rightSidebar. Read lazily so
     // the calls resolve against the mounted component.

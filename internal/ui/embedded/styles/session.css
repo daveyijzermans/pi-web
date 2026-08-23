@@ -3182,6 +3182,7 @@
       color: var(--thinkingText);
       font-style: italic;
       white-space: pre-wrap;
+      line-height: 1.5;
     }
 
     .message-timestamp + .thinking-block .thinking-text,
@@ -3798,6 +3799,7 @@
       min-width: 0;
       font-family: var(--font-content);
       font-size: var(--font-content-size);
+      line-height: 1.5;
     }
 
     /* Markdown headings */

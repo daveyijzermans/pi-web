@@ -9,6 +9,7 @@ import { setIconElement, Loader } from '../shared/icons.js';
 import { t } from '../shared/i18n.js';
 import { openLabel } from './session-modals.svelte.js';
 import { navigate } from '../shared/navigation.js';
+import { sessionRuntime } from './session-runtime.js';
 import { extractContent } from './tree/session-filter.js';
 import {
   escapeHtml,
@@ -124,9 +125,11 @@ export function wireSessionContentRuntime({
     });
   };
 
-  // After each (re)render of <SessionContent>, lazy-highlight any pending code blocks.
+  // After each (re)render of <SessionContent>, re-apply persisted collapse/toggle
+  // state and lazy-highlight any pending code blocks.
   if (contentRuntime) {
-    contentRuntime.afterRender = (_container) => {
+    contentRuntime.afterRender = (container) => {
+      sessionRuntime.toggleState?.applyToNode(container);
       applyLazyHighlighting(documentImpl);
     };
   }

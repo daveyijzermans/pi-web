@@ -1,13 +1,14 @@
 <script>
-  import { icon, Folder, ListTree, PanelLeftClose, X } from '../../shared/icons.js';
+  import { icon, Clock, Folder, ListTree, PanelLeftClose, X } from '../../shared/icons.js';
   import { t } from '../../shared/i18n.js';
   import { getSessionModel } from '../../session/session-context.js';
   import { sessionRuntime } from '../../session/session-runtime.js';
   import { getSessionRuntime } from '../../session/session-runtime-context.js';
   import FileTree from './FileTree.svelte';
+  import SessionSidebarSessions from './SessionSidebarSessions.svelte';
   import SessionTreeNodes from './SessionTreeNodes.svelte';
 
-  let { sessionId = '' } = $props();
+  let { sessionId = '', cwd = '' } = $props();
 
   let activeTab = $state('session');
 
@@ -44,6 +45,13 @@
         data-tab="files"
         onclick={() => (activeTab = 'files')}
         >{@html icon(Folder, { size: 14 })}{t('files.tabFiles')}</button
+      ><button
+        class="tab-btn {activeTab === 'sessions' ? 'active' : ''}"
+        role="tab"
+        aria-selected={activeTab === 'sessions'}
+        data-tab="sessions"
+        onclick={() => (activeTab = 'sessions')}
+        >{@html icon(Clock, { size: 14 })}{t('session.sessionsTab')}</button
       >
     </div>
     <div class="session-view-wrapper" style:display={activeTab !== 'session' ? 'none' : ''}>
@@ -87,8 +95,10 @@
         id="tree-container"
       ></div>
       <div class="tree-status" id="tree-status"></div>{/if}
-  {:else}
+  {:else if activeTab === 'files'}
     {#if sessionId}<FileTree {sessionId} />{/if}
+  {:else if activeTab === 'sessions'}
+    <SessionSidebarSessions {cwd} currentSessionId={sessionId} />
   {/if}
 </aside>
 <div

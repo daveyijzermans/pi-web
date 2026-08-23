@@ -9,10 +9,10 @@
   import { t } from '../../shared/i18n.js';
   import { safeMarkedParse } from '../../session/render/markdown.js';
   import { formatTimestamp } from '../../session/render/entry-format.js';
-  import { chipsFromItems, resolveToolResult } from '../../session/render/tool-summary.js';
+  import { resolveToolResult } from '../../session/render/tool-summary.js';
   import { extractAttachmentRefs } from './attachment-refs.js';
   import ToolOutput from './ToolOutput.svelte';
-  import ToolChip from './ToolChip.svelte';
+  import ToolCall from './ToolCall.svelte';
   import AskQuestion from './AskQuestion.svelte';
 
   // `live` (passed from <SessionContent>) gates the fork/label buttons, which
@@ -158,8 +158,15 @@
             result={resolveToolResult(model, seg.block.id)}
           />
         {:else}
-          {#each chipsFromItems(seg.items) as chip (chip.sourceIds.join(' '))}
-            <ToolChip {chip} {model} />
+          {#each seg.items as item, itemIndex (itemIndex)}
+            {#if item.type === 'thinking'}
+              <div class="thinking-block">
+                <div class="thinking-text">{item.text}</div>
+                <div class="thinking-collapsed">Thinking ...</div>
+              </div>
+            {:else if item.type === 'toolCall'}
+              <ToolCall call={item.block} {model} />
+            {/if}
           {/each}
         {/if}
       </div>

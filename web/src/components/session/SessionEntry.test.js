@@ -38,7 +38,7 @@ describe('SessionEntry', () => {
     expect(textEl.getAttribute('data-entry-ids')).toBeNull();
   });
 
-  it('renders tool chips inside assistant-group without data-entry-ids on chip', () => {
+  it('renders thinking + tool calls inline inside assistant-group', () => {
     const entry = {
       id: 'a',
       type: 'message',
@@ -56,10 +56,10 @@ describe('SessionEntry', () => {
     expect(group).not.toBeNull();
     expect(group.getAttribute('data-entry-ids')).toBe('a');
 
-    const chip = group.querySelector('.tool-chip');
-    expect(chip).not.toBeNull();
-    expect(chip.tagName).toBe('BUTTON');
-    expect(chip.getAttribute('data-entry-ids')).toBeNull();
+    // Inline rendering: a thinking block and an inline tool execution, no chip button.
+    expect(group.querySelector('.thinking-text')?.textContent).toContain('thinking...');
+    expect(group.querySelector('.tool-execution')).not.toBeNull();
+    expect(group.querySelector('.tool-chip')).toBeNull();
   });
 
   it('renders nothing for tool-result entries', () => {
