@@ -2,6 +2,7 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
+  include_ext = ["go", "css", "html", "tpl", "tmpl"]
   bin = "./tmp/main"
   cmd = "go build -o ./tmp/main ./cmd/pi-web"
   delay = 1000
@@ -10,4 +11,4 @@ tmp_dir = "tmp"
   include_file = ["web/dist/.vite/manifest.json", "internal/ui/embedded/export/export.js"]
   send_interrupt = true
   kill_delay = "1s"
-  args_bin = ["--host", "127.0.0.1", "-p", "31416"]
+  args_bin = ["--host", "0.0.0.0", "-p", "31415"]
