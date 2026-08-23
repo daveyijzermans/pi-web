@@ -3183,6 +3183,7 @@
       font-style: italic;
       white-space: pre-wrap;
       line-height: 1.5;
+      font-family: var(--font-code);
     }
 
     .message-timestamp + .thinking-block .thinking-text,
@@ -3250,6 +3251,7 @@
       white-space: pre-wrap;
       word-wrap: break-word;
       overflow-wrap: break-word;
+      font-family: var(--font-code);
     }
 
     /* Highlighted bash command: let hljs token colours show through without the
@@ -3274,7 +3276,7 @@
       color: var(--toolOutput);
       word-wrap: break-word;
       overflow-wrap: break-word;
-      font-family: inherit;
+      font-family: var(--font-code);
       overflow-x: auto;
     }
 
@@ -3290,7 +3292,7 @@
     .tool-output pre {
       margin: 0;
       padding: 0;
-      font-family: inherit;
+      font-family: var(--font-code);
       color: inherit;
       white-space: pre-wrap;
       word-wrap: break-word;
