@@ -48,20 +48,13 @@
 <div class="tool-execution {statusClass}" id={resultEntry ? `entry-${resultEntry.id}` : undefined}>
   {#if call.name === 'bash'}
     {@const command = str(args.command)}
-    {#if fullOutput}
-      <div class="bash-section-label">Command</div>
-    {/if}
-    <div class="tool-command">
-      {#if fullOutput}{:else}$
-      {/if}{#if command === null}<span class="tool-error">[invalid arg]</span>{:else}<code
-          class="hljs"
-          data-highlight-pending
-          data-lang="bash">{command || '...'}</code>{/if}
+    <div class="tool-header">
+      <span class="tool-name">bash</span>
     </div>
-    {#if result && resultText.trim()}
-      {#if fullOutput}<div class="bash-section-label">Output</div>{/if}
-      <ToolOutput text={resultText.trim()} />
-    {/if}
+    <div class="tool-command">{#if command === null}<span class="tool-error">[invalid arg]</span
+        >{:else}<code class="hljs" data-highlight-pending data-lang="bash">{command ||
+            '...'}</code>{/if}</div>
+    {#if result && resultText.trim()}<ToolOutput text={resultText.trim()} />{/if}
   {:else if call.name === 'read'}
     <div class="tool-header">
       <span class="tool-name">read</span>

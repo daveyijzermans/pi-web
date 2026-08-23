@@ -3247,6 +3247,7 @@
     }
 
     .tool-command {
+      margin-top: var(--line-height);
       font-weight: bold;
       white-space: pre-wrap;
       word-wrap: break-word;

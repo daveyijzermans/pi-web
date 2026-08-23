@@ -10,7 +10,27 @@
 
   let { sessionId = '', cwd = '' } = $props();
 
-  let activeTab = $state('session');
+  const SIDEBAR_TAB_KEY = 'pi-web:v1:left-sidebar-tab';
+  const SIDEBAR_TABS = ['sessions', 'session', 'files'];
+  function readInitialTab() {
+    try {
+      const stored = globalThis.localStorage?.getItem(SIDEBAR_TAB_KEY);
+      if (stored && SIDEBAR_TABS.includes(stored)) return stored;
+    } catch (_) {
+      /* ignore */
+    }
+    return 'sessions';
+  }
+  let activeTab = $state(readInitialTab());
+  function activateTab(tab) {
+    if (!SIDEBAR_TABS.includes(tab)) return;
+    activeTab = tab;
+    try {
+      globalThis.localStorage?.setItem(SIDEBAR_TAB_KEY, tab);
+    } catch (_) {
+      /* ignore */
+    }
+  }
 
   const model = getSessionModel();
 
@@ -32,26 +52,26 @@
   <div class="sidebar-header">
     <div class="tab-bar" role="tablist">
       <button
+        class="tab-btn {activeTab === 'sessions' ? 'active' : ''}"
+        role="tab"
+        aria-selected={activeTab === 'sessions'}
+        data-tab="sessions"
+        onclick={() => activateTab('sessions')}
+        >{@html icon(Clock, { size: 14 })}{t('session.sessionsTab')}</button
+      ><button
         class="tab-btn {activeTab === 'session' ? 'active' : ''}"
         role="tab"
         aria-selected={activeTab === 'session'}
         data-tab="session"
-        onclick={() => (activeTab = 'session')}
+        onclick={() => activateTab('session')}
         >{@html icon(ListTree, { size: 14 })}{t('files.tabSession')}</button
       ><button
         class="tab-btn {activeTab === 'files' ? 'active' : ''}"
         role="tab"
         aria-selected={activeTab === 'files'}
         data-tab="files"
-        onclick={() => (activeTab = 'files')}
+        onclick={() => activateTab('files')}
         >{@html icon(Folder, { size: 14 })}{t('files.tabFiles')}</button
-      ><button
-        class="tab-btn {activeTab === 'sessions' ? 'active' : ''}"
-        role="tab"
-        aria-selected={activeTab === 'sessions'}
-        data-tab="sessions"
-        onclick={() => (activeTab = 'sessions')}
-        >{@html icon(Clock, { size: 14 })}{t('session.sessionsTab')}</button
       >
     </div>
     <div class="session-view-wrapper" style:display={activeTab !== 'session' ? 'none' : ''}>

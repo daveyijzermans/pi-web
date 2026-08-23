@@ -1,7 +1,17 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import { fireEvent } from '@testing-library/svelte';
 import SessionTree from './SessionTree.svelte';
+
+// The active tab persists to localStorage; clear it so each test starts from
+// the default (Sessions).
+beforeEach(() => {
+  try {
+    localStorage.clear();
+  } catch {
+    /* ignore */
+  }
+});
 
 // Mock the files-api module so FileTree does not make real network calls
 vi.mock('../../session/chat/files-api.js', () => ({
@@ -14,8 +24,11 @@ vi.mock('../../session/chat/files-api.js', () => ({
 // just proves component rendering + matchers work so later phases can lean on
 // them. Behavioural tests arrive when the component owns real state.
 describe('SessionTree (shell)', () => {
-  it('renders the sidebar scaffold with search and filter controls', () => {
+  it('renders the sidebar scaffold with search and filter controls', async () => {
     render(SessionTree);
+    // Search + filter controls live in the Session (tree) tab, which is no
+    // longer the default — activate it first.
+    await fireEvent.click(document.querySelector('[data-tab="session"]'));
     expect(screen.getByRole('textbox')).toBeInTheDocument();
     // the five tree filter buttons (default/no-tools/user/labeled/all)
     expect(screen.getAllByRole('button').length).toBeGreaterThanOrEqual(5);
@@ -24,21 +37,25 @@ describe('SessionTree (shell)', () => {
 });
 
 describe('SessionTree tab toggle', () => {
-  it('renders both tabs, Session is active by default, file tree NOT in DOM', () => {
+  it('renders tabs with Sessions active by default, file tree NOT in DOM', () => {
     render(SessionTree, { props: { sessionId: 'test-session' } });
 
     const tablist = document.querySelector('[role="tablist"]');
     expect(tablist).toBeInTheDocument();
 
+    const sessionsTab = tablist.querySelector('[data-tab="sessions"]');
     const sessionTab = tablist.querySelector('[data-tab="session"]');
     const filesTab = tablist.querySelector('[data-tab="files"]');
 
+    expect(sessionsTab).toBeInTheDocument();
     expect(sessionTab).toBeInTheDocument();
     expect(filesTab).toBeInTheDocument();
-    expect(sessionTab.getAttribute('aria-selected')).toBe('true');
+    // Sessions list is the default (leftmost) tab, like upstream.
+    expect(sessionsTab.getAttribute('aria-selected')).toBe('true');
+    expect(sessionTab.getAttribute('aria-selected')).toBe('false');
     expect(filesTab.getAttribute('aria-selected')).toBe('false');
 
-    // File tree should NOT be in DOM when Session tab is active
+    // File tree should NOT be in DOM when Sessions tab is active
     expect(document.querySelector('.file-tree')).not.toBeInTheDocument();
   });
 
