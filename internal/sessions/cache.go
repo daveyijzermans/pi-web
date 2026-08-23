@@ -177,6 +177,19 @@ func (c *Cache) LoadAll(dir string) ([]SessionSummary, error) {
 
 // FindPath returns the full filesystem path for a session filename, using the
 // in-memory path index built by LoadAll. Returns ("", false) if not found.
+// Remove evicts a session (by filename ID) from all in-memory indexes after
+// its file has been deleted from disk.
+func (c *Cache) Remove(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	path, ok := c.pathIndex[id]
+	if ok {
+		delete(c.entries, path)
+		delete(c.sessionCache, path)
+		delete(c.pathIndex, id)
+	}
+}
+
 func (c *Cache) FindPath(name string) (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

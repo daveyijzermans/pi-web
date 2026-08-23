@@ -348,6 +348,11 @@ func RenameSession(path, name string, now func() time.Time) error {
 	return appendSessionName(path, name, false, now)
 }
 
+// DeleteSession removes a session file from disk.
+func DeleteSession(path string) error {
+	return os.Remove(path)
+}
+
 // AutoTitleSession is like RenameSession but marks the entry as written by
 // pi-web's auto-titler (autoTitle:true), so a later read can tell its own titles
 // apart from a user's manual rename and re-title safely across restarts.

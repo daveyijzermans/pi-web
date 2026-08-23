@@ -15,6 +15,17 @@ export async function renameSession(sessionId, name, { fetchImpl = fetch } = {})
   return data;
 }
 
+export async function deleteSession(sessionId, { fetchImpl = fetch } = {}) {
+  const res = await fetchImpl('/api/delete-session?id=' + encodeURIComponent(sessionId), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'delete failed');
+  return data;
+}
+
 // Fetches fresh entries — the in-memory model is stale after a live reload.
 export async function loadForkEntries(sessionId, { fetchImpl = fetch } = {}) {
   const res = await fetchImpl(sessionUrl('/api/session', sessionId));

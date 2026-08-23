@@ -258,6 +258,7 @@ export default {
   'menu.share': 'Share',
   'menu.fork': 'Fork',
   'menu.clone': 'Clone',
+  'menu.delete': 'Delete',
   'menu.resumeTerminal': 'Resume via Terminal',
   'menu.tree': 'Tree',
   'menu.diff': 'Diff',
@@ -268,6 +269,9 @@ export default {
   'menu.noUserMessagesToFork': 'No user messages to fork from',
   'menu.loadMessagesFailed': 'Failed to load messages',
   'menu.cloneFailed': 'Clone failed',
+  'menu.deletePrompt': 'Delete this session? This cannot be undone.',
+  'menu.deleted': 'Session deleted',
+  'menu.deleteFailed': 'Delete failed',
   'menu.notImplemented': 'Not yet implemented',
 
   // ── Diff review modal ──

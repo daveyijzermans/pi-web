@@ -13,6 +13,7 @@
     Share2,
     GitFork,
     Copy,
+    Trash2,
     Terminal,
     ListTree,
     FileDiff,
@@ -32,6 +33,7 @@
   import { USER_DOCS_URL, TELEGRAM_INVITE_URL } from '../../shared/links.js';
   import {
     cloneSession,
+    deleteSession,
     forkSession,
     loadForkEntries,
     renameSession,
@@ -52,6 +54,7 @@
     { action: 'share', icon: Share2, label: 'menu.share' },
     { action: 'fork', icon: GitFork, label: 'menu.fork' },
     { action: 'clone', icon: Copy, label: 'menu.clone' },
+    { action: 'delete', icon: Trash2, label: 'menu.delete' },
     { action: 'terminal', icon: Terminal, label: 'menu.resumeTerminal' },
     { action: 'tree', icon: ListTree, label: 'menu.tree', kbd: '⌘B' },
     { action: 'diff', icon: FileDiff, label: 'menu.diff' },
@@ -199,6 +202,17 @@
               else toast(data.error || t('menu.cloneFailed'));
             })
             .catch(() => toast(t('menu.cloneFailed')));
+          break;
+        }
+        case 'delete': {
+          closeMenu();
+          if (!window.confirm(t('menu.deletePrompt'))) break;
+          deleteSession(sessionId)
+            .then(() => {
+              toast(t('menu.deleted'));
+              navigate('/');
+            })
+            .catch(() => toast(t('menu.deleteFailed')));
           break;
         }
         case 'version':

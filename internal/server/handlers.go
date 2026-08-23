@@ -419,6 +419,33 @@ func (s *Server) handleRenameSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 0, map[string]any{"ok": true, "name": name})
 }
 
+func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	id := r.URL.Query().Get("id")
+	var resolved sessions.ResolvedSession
+	var err error
+	if s.cache != nil {
+		resolved, err = s.cache.Resolve(s.sessionsDir, id)
+	} else {
+		resolved, err = sessions.ResolveByID(s.sessionsDir, id)
+	}
+	if resolveOrWriteError(w, err) {
+		return
+	}
+	if err := sessions.DeleteSession(resolved.Path); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if s.cache != nil {
+		s.cache.Remove(resolved.Session.ID)
+	}
+	s.broadcast(resolved.Session.ID, "deleted")
+	writeJSON(w, 0, map[string]any{"ok": true})
+}
+
 func (s *Server) handleArchiveSession(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")

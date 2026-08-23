@@ -351,6 +351,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/fork-session", s.auth.Wrap(s.handleApiForkSession))
 	mux.HandleFunc("/api/clone-session", s.auth.Wrap(s.handleApiCloneSession))
 	mux.HandleFunc("/api/rename-session", s.auth.Wrap(s.handleRenameSession))
+	mux.HandleFunc("/api/delete-session", s.auth.Wrap(s.handleDeleteSession))
 	mux.HandleFunc("/api/archive-session", s.auth.Wrap(s.handleArchiveSession))
 
 	mux.HandleFunc("/api/label-session", s.auth.Wrap(s.handleLabelSessionEntry))

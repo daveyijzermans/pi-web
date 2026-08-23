@@ -279,6 +279,7 @@
       onDelta: (status) => setSessionRunning(status.id, status.running, status),
       onMessage: (message) => {
         if (message === 'new-session') refreshSessions();
+        if (message === 'deleted') refreshSessions();
         if (message === 'reload') scheduleReload();
       },
     });
