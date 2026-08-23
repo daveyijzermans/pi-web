@@ -52,8 +52,10 @@
     {/if}
     <div class="tool-command">
       {#if fullOutput}{:else}$
-      {/if}{#if command === null}<span class="tool-error">[invalid arg]</span>{:else}{command ||
-          '...'}{/if}
+      {/if}{#if command === null}<span class="tool-error">[invalid arg]</span>{:else}<code
+          class="hljs"
+          data-highlight-pending
+          data-lang="bash">{command || '...'}</code>{/if}
     </div>
     {#if result && resultText.trim()}
       {#if fullOutput}<div class="bash-section-label">Output</div>{/if}

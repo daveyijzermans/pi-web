@@ -1,12 +1,24 @@
 export function buildContextWindows(models = []) {
   const windows = {};
+  const put = (key, value) => {
+    if (key && value) windows[key.toLowerCase()] = value;
+  };
   (models || []).forEach((model) => {
     const provider = model.provider || '';
     const id = model.id || model.modelId || '';
-    if (!id) return;
-    windows[id.toLowerCase()] = model.contextWindow || 0;
+    // Index by display name too: the toolbar label can be the id form
+    // ("claude-opus-4-8 @ anthropic", from worker-status) or the display-name
+    // form ("Claude Opus 4.8 @ anthropic", from the model selector). Indexing
+    // both keeps the context gauge from flipping to 100% and respects larger
+    // windows regardless of which label form is active.
+    const name = model.name || '';
+    const cw = model.contextWindow || 0;
+    if (!cw) return;
+    put(id, cw);
+    put(name, cw);
     if (provider) {
-      windows[`${provider}/${id}`.toLowerCase()] = model.contextWindow || 0;
+      put(`${provider}/${id}`, cw);
+      put(`${provider}/${name}`, cw);
     }
   });
   return windows;

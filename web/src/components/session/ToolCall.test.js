@@ -34,6 +34,15 @@ describe('ToolCall', () => {
     expect(container.querySelector('.tool-command')?.textContent).toContain('ls -la');
   });
 
+  it('marks the bash command for bash syntax highlighting', () => {
+    const call = { id: 'b', name: 'bash', arguments: { command: 'ls -la' } };
+    const { container } = render(ToolCall, { props: { call, model: model() } });
+    const code = container.querySelector('.tool-command code[data-highlight-pending]');
+    expect(code).not.toBeNull();
+    expect(code.getAttribute('data-lang')).toBe('bash');
+    expect(code.textContent).toBe('ls -la');
+  });
+
   it('renders an ask_user_question card with clickable options', () => {
     const call = {
       id: 'q',
