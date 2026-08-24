@@ -154,6 +154,15 @@ export default function (pi: ExtensionAPI) {
   // Named with the pi-web prefix (like pi_web_set_tab_title) so it never
   // collides with a separately-installed `ask_user_question` provider such as
   // ghoseb/pi-askuserquestion — a name clash makes pi refuse to load both.
+  //
+  // pi-web can also be present twice at once: installed globally AND as a
+  // project-local checkout loaded via `pi --approve`. Both copies would try to
+  // register this same tool, and pi refuses to load the second one — which
+  // aborts the whole session. Register at most once: bail if a sibling copy
+  // already did, and swallow the name-clash error rather than failing to load.
+  const piWebAskGlobal = globalThis as { __piWebAskRegistered?: boolean };
+  if (piWebAskGlobal.__piWebAskRegistered) return;
+  try {
   pi.registerTool({
     name: "pi_web_ask_user_question",
     label: "Ask User Question",
@@ -220,6 +229,12 @@ export default function (pi: ExtensionAPI) {
       return buildAwaitingResult(questions);
     },
   });
+  } catch (_err) {
+    // A sibling pi-web copy already registered the tool; skip this duplicate.
+    piWebAskGlobal.__piWebAskRegistered = true;
+    return;
+  }
+  piWebAskGlobal.__piWebAskRegistered = true;
 
   // Names active in the current prompt, refreshed each turn. Seeded with our own
   // tool so the tool_call guard works even before the first before_agent_start.
