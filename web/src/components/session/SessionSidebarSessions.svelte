@@ -16,6 +16,7 @@
     defaultFetchSessions,
     formatRelativeTime,
     groupSessionsByDate,
+    groupSessionsByProject,
     normalizeSession,
     sessionModelLabel,
     sessionsCountLabel,
@@ -43,6 +44,8 @@
   let spinnerChar = $state('');
   let spinnerStyle = $state('');
   let selectedProject = $state(untrack(() => cwd));
+  // When true, list sessions across every project, grouped by project.
+  let allProjects = $state(false);
   let projects = $state([]);
   let projectsOpen = $state(false);
   let projectsLoading = $state(false);
@@ -70,6 +73,8 @@
     );
   });
   const groupedSessions = $derived(groupSessionsByDate(sessions, now));
+  const groupedByProject = $derived(groupSessionsByProject(sessions));
+  const headerName = $derived(allProjects ? t('session.allProjects') : projectName);
   const pageStart = $derived(totalSessions && sessions.length ? currentPage * pageSize + 1 : 0);
   const pageEnd = $derived(pageStart ? pageStart + sessions.length - 1 : 0);
   const hasPreviousPage = $derived(currentPage > 0);
@@ -100,7 +105,7 @@
     error = '';
     try {
       const response = await fetchSessions({
-        project,
+        ...(allProjects ? {} : { project }),
         limit: pageSize,
         offset: pageIndex * pageSize,
         ...(searchQuery ? { query: searchQuery } : {}),
@@ -143,11 +148,21 @@
 
   function selectProject(project) {
     projectsOpen = false;
-    if (!project || project === selectedProject) return;
+    if (!project || (!allProjects && project === selectedProject)) return;
     if (sessionSearchTimer) clearTimeout(sessionSearchTimer);
     query = '';
+    allProjects = false;
     selectedProject = project;
     loadProjectSessions(project, { pageIndex: 0, searchQuery: '' });
+  }
+
+  function selectAll() {
+    projectsOpen = false;
+    if (allProjects) return;
+    if (sessionSearchTimer) clearTimeout(sessionSearchTimer);
+    query = '';
+    allProjects = true;
+    loadProjectSessions(null, { pageIndex: 0, searchQuery: '' });
   }
 
   function onSessionSearch(event) {
@@ -233,12 +248,12 @@
       >
         <span class="sidebar-project-icon">{@html icon(FolderGit2, { size: 15 })}</span>
         <span class="sidebar-project-copy">
-          <span class="sidebar-project-label"
-            >{t(
-              selectedProject === cwd ? 'session.currentProject' : 'session.browsingProject',
-            )}</span
-          >
-          <span class="sidebar-project-name">{projectName}</span>
+          {#if !allProjects}<span class="sidebar-project-label"
+              >{t(
+                selectedProject === cwd ? 'session.currentProject' : 'session.browsingProject',
+              )}</span
+            >{/if}
+          <span class="sidebar-project-name">{headerName}</span>
         </span>
         {#if !loading && !error}
           <span
@@ -274,32 +289,50 @@
               <div class="sidebar-project-state sidebar-project-state--error">
                 {projectsError}
               </div>
-            {:else if filteredProjects.length === 0}
-              <div class="sidebar-project-state">
-                {projectQuery.trim() ? t('index.noProjectsMatch') : t('index.noProjectsFound')}
-              </div>
             {:else}
-              {#each filteredProjects as project (project.path)}
-                {@const name = project.path.split(/[\\/]/).filter(Boolean).at(-1) || project.path}
-                <button
-                  type="button"
-                  class="sidebar-project-option"
-                  class:active={project.path === selectedProject}
-                  title={project.path}
-                  onclick={() => selectProject(project.path)}
-                >
-                  <span class="sidebar-project-option-copy">
-                    <span class="sidebar-project-option-name">{name}</span>
-                    <span class="sidebar-project-option-path">{project.path}</span>
-                  </span>
-                  <span class="sidebar-project-option-count">{project.sessionCount || 0}</span>
-                  {#if project.path === selectedProject}
-                    <span class="sidebar-project-option-check"
-                      >{@html icon(Check, { size: 13 })}</span
-                    >
-                  {/if}
-                </button>
-              {/each}
+              <button
+                type="button"
+                class="sidebar-project-option"
+                class:active={allProjects}
+                title={t('session.allProjects')}
+                onclick={() => selectAll()}
+              >
+                <span class="sidebar-project-option-copy">
+                  <span class="sidebar-project-option-name">{t('session.allProjects')}</span>
+                  <span class="sidebar-project-option-path">{t('session.allProjectsHint')}</span>
+                </span>
+                {#if allProjects}
+                  <span class="sidebar-project-option-check">{@html icon(Check, { size: 13 })}</span>
+                {/if}
+              </button>
+              {#if filteredProjects.length === 0}
+                <div class="sidebar-project-state">
+                  {projectQuery.trim() ? t('index.noProjectsMatch') : t('index.noProjectsFound')}
+                </div>
+              {:else}
+                {#each filteredProjects as project (project.path)}
+                  {@const name =
+                    project.path.split(/[\\/]/).filter(Boolean).at(-1) || project.path}
+                  <button
+                    type="button"
+                    class="sidebar-project-option"
+                    class:active={!allProjects && project.path === selectedProject}
+                    title={project.path}
+                    onclick={() => selectProject(project.path)}
+                  >
+                    <span class="sidebar-project-option-copy">
+                      <span class="sidebar-project-option-name">{name}</span>
+                      <span class="sidebar-project-option-path">{project.path}</span>
+                    </span>
+                    <span class="sidebar-project-option-count">{project.sessionCount || 0}</span>
+                    {#if !allProjects && project.path === selectedProject}
+                      <span class="sidebar-project-option-check"
+                        >{@html icon(Check, { size: 13 })}</span
+                      >
+                    {/if}
+                  </button>
+                {/each}
+              {/if}
             {/if}
           </div>
         </div>
@@ -319,6 +352,53 @@
   </label>
 </div>
 
+{#snippet sessionRow(session)}
+  {@const href = `/session?id=${encodeURIComponent(session.id)}`}
+  {@const activeSession = session.id === currentSessionId}
+  <a
+    class="sidebar-session-row"
+    class:sidebar-session-row--active={activeSession}
+    class:sidebar-session-row--running={isRunning(session.id)}
+    {href}
+    aria-current={activeSession ? 'page' : undefined}
+    onclick={(event) => onSessionClick(event, href)}
+    onpointerenter={() => startPrefetch(session.id)}
+    onmousedown={() => startPrefetch(session.id)}
+    ontouchstart={() => startPrefetch(session.id)}
+  >
+    <span class="sidebar-session-copy">
+      <span class="sidebar-session-heading">
+        <span class="sidebar-session-title">{session.name || session.id}</span>
+        {#if activeSession}
+          <span
+            class="sidebar-session-indicator"
+            class:sidebar-session-indicator--running={isRunning(session.id)}
+            aria-hidden={isRunning(session.id) ? undefined : 'true'}
+            aria-label={isRunning(session.id) ? t('index.active') : undefined}
+            style={activeSessionCatStyle}>{activeSessionCat.frames[0]}</span
+          >
+        {/if}
+        {#if isRunning(session.id) && !activeSession}
+          <span
+            class="sidebar-running-spinner"
+            data-running-spinner
+            aria-label={t('index.active')}
+            style={spinnerStyle}>{spinnerChar}</span
+          >
+        {/if}
+      </span>
+      <span class="sidebar-session-meta">
+        <span title={session.lastActivity}>{formatRelativeTime(session.lastActivity, now)}</span>
+        {#if sessionModelLabel(session)}
+          <span class="sidebar-session-model" title={sessionModelLabel(session)}
+            >{sessionModelLabel(session)}</span
+          >
+        {/if}
+      </span>
+    </span>
+  </a>
+{/snippet}
+
 <div class="sidebar-session-list" aria-live="polite" bind:this={sessionListEl}>
   {#if loading}
     <div class="sidebar-session-state">{t('index.loadingSessions')}</div>
@@ -330,6 +410,20 @@
     <div class="sidebar-session-state">
       {query.trim() ? t('session.noMatchingProjectSessions') : t('session.noProjectSessions')}
     </div>
+  {:else if allProjects}
+    {#each groupedByProject as group (group.project)}
+      <section class="sidebar-session-group">
+        <h2 class="sidebar-session-group-heading">
+          <span
+            >{group.project.split(/[\\/]/).filter(Boolean).at(-1) ||
+              group.project ||
+              t('session.allProjects')}</span
+          >
+          <span class="sidebar-session-group-count">{group.sessions.length}</span>
+        </h2>
+        {#each group.sessions as session (session.id)}{@render sessionRow(session)}{/each}
+      </section>
+    {/each}
   {:else}
     {#each groupedSessions as group (group.bucket)}
       <section class="sidebar-session-group">
@@ -339,54 +433,7 @@
             <span class="sidebar-session-group-count">{group.sessions.length}</span>
           </h2>
         {/if}
-        {#each group.sessions as session (session.id)}
-          {@const href = `/session?id=${encodeURIComponent(session.id)}`}
-          {@const activeSession = selectedProject === cwd && session.id === currentSessionId}
-          <a
-            class="sidebar-session-row"
-            class:sidebar-session-row--active={activeSession}
-            class:sidebar-session-row--running={isRunning(session.id)}
-            {href}
-            aria-current={activeSession ? 'page' : undefined}
-            onclick={(event) => onSessionClick(event, href)}
-            onpointerenter={() => startPrefetch(session.id)}
-            onmousedown={() => startPrefetch(session.id)}
-            ontouchstart={() => startPrefetch(session.id)}
-          >
-            <span class="sidebar-session-copy">
-              <span class="sidebar-session-heading">
-                <span class="sidebar-session-title">{session.name || session.id}</span>
-                {#if activeSession}
-                  <span
-                    class="sidebar-session-indicator"
-                    class:sidebar-session-indicator--running={isRunning(session.id)}
-                    aria-hidden={isRunning(session.id) ? undefined : 'true'}
-                    aria-label={isRunning(session.id) ? t('index.active') : undefined}
-                    style={activeSessionCatStyle}>{activeSessionCat.frames[0]}</span
-                  >
-                {/if}
-                {#if isRunning(session.id) && !activeSession}
-                  <span
-                    class="sidebar-running-spinner"
-                    data-running-spinner
-                    aria-label={t('index.active')}
-                    style={spinnerStyle}>{spinnerChar}</span
-                  >
-                {/if}
-              </span>
-              <span class="sidebar-session-meta">
-                <span title={session.lastActivity}
-                  >{formatRelativeTime(session.lastActivity, now)}</span
-                >
-                {#if sessionModelLabel(session)}
-                  <span class="sidebar-session-model" title={sessionModelLabel(session)}
-                    >{sessionModelLabel(session)}</span
-                  >
-                {/if}
-              </span>
-            </span>
-          </a>
-        {/each}
+        {#each group.sessions as session (session.id)}{@render sessionRow(session)}{/each}
       </section>
     {/each}
   {/if}

@@ -216,6 +216,8 @@ export default {
   'session.nextSessionsPage': 'Next sessions page',
   'session.currentProject': 'Current project',
   'session.browsingProject': 'Browsing project',
+  'session.allProjects': 'All projects',
+  'session.allProjectsHint': 'Sessions from every project',
   'session.switchProject': 'Switch project',
   'session.loadingProjects': 'Loading projects…',
   'session.loadingMoreProjects': 'Loading more projects…',

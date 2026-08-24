@@ -96,6 +96,54 @@ describe('SessionSidebarSessions', () => {
     expect(screen.queryByRole('link', { name: /Current project work/ })).not.toBeInTheDocument();
   });
 
+  it('shows sessions from every project grouped by project when All is selected', async () => {
+    const user = userEvent.setup();
+    const fetchSessions = vi.fn(({ project }) =>
+      Promise.resolve({
+        sessions:
+          project === undefined
+            ? [
+                {
+                  ID: 'a.jsonl',
+                  Name: 'Alpha work',
+                  Project: '/repo/pi-web',
+                  LastActivity: '2026-07-28T10:00:00Z',
+                },
+                {
+                  ID: 'b.jsonl',
+                  Name: 'Beta work',
+                  Project: '/repo/other',
+                  LastActivity: '2026-07-27T10:00:00Z',
+                },
+              ]
+            : [{ ID: 'a.jsonl', Name: 'Alpha work', Project: '/repo/pi-web' }],
+        total: project === undefined ? 2 : 1,
+      }),
+    );
+    const fetchProjects = vi.fn().mockResolvedValue({
+      projects: [
+        { path: '/repo/pi-web', sessionCount: 1 },
+        { path: '/repo/other', sessionCount: 1 },
+      ],
+    });
+
+    render(SessionSidebarSessions, {
+      props: { cwd: '/repo/pi-web', fetchSessions, fetchProjects },
+    });
+
+    await screen.findByRole('link', { name: /Alpha work/ });
+    await user.click(screen.getByRole('button', { name: /Current project pi-web/ }));
+    await user.click(screen.getByRole('button', { name: /All projects/ }));
+
+    await waitFor(() =>
+      expect(fetchSessions).toHaveBeenCalledWith({ limit: 20, offset: 0 }),
+    );
+    // Grouped by project → one heading per project, both projects' sessions shown.
+    expect(await screen.findByRole('heading', { name: /pi-web/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /other/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Beta work/ })).toBeInTheDocument();
+  });
+
   it('groups sessions by recency', async () => {
     const now = Date.now();
     render(SessionSidebarSessions, {
