@@ -1,0 +1,32 @@
+*.exe
+.DS_Store
+.worktrees/
+/pi-web
+web/node_modules/
+web/dist/
+web/dist-export/
+internal/ui/embedded/export/export.js
+.pi/extensions/node_modules/
+
+node_modules/
+
+# Scratch / transient — keep `git status` meaningful
+.tmp/
+.pi/tasks/
+context.md
+progress.md
+/_*.md
+/*.jsonl
+*.exe~
+e2e/.shots/
+e2e/.tmp-*/
+e2e/scripts/check-inj.mjs
+e2e/scripts/shot-actions.mjs
+e2e/scripts/shot-clip.mjs
+.env
+__pycache__/
+
+# Keep skill sources (above) but never ship a runtime memory DB if one exists.
+.pi/skills/**/*.db
+.pi/skills/**/*.sqlite
+.pi/skills/**/*.sqlite3
