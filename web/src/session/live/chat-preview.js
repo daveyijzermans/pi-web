@@ -1,4 +1,3 @@
-import { icon, ChevronRight } from '../../shared/icons.js';
 
 export function getSpinnerConfig(windowImpl = typeof window !== 'undefined' ? window : null) {
   let style = 'runcat';
@@ -205,19 +204,15 @@ function createAssistantPreview(documentImpl, { waiting = false, windowImpl = nu
   const el = documentImpl.createElement('div');
   el.id = 'chat-preview-stream';
   el.className = 'assistant-message chat-preview-stream' + (waiting ? ' chat-preview-waiting' : '');
-  const thought = documentImpl.createElement('button');
-  thought.type = 'button';
-  thought.className = 'tool-chip chat-preview-thought';
-  thought.setAttribute('aria-expanded', 'false');
-  thought.style.display = 'none';
-  thought.innerHTML =
-    '<span class="tool-chip-label">Thought</span>' +
-    icon(ChevronRight, { size: 12, class: 'tool-chip-chevron' });
-  thought.addEventListener('click', () => {
-    thought.setAttribute('aria-expanded', String(el.classList.toggle('expanded')));
-  });
-  el.append(thought);
-  el.append(createMarkdownBlock(documentImpl, 'chat-preview-thought-body'));
+  // Streaming reasoning renders inline as a .thinking-block/.thinking-text —
+  // matching the settled message view — not a collapsed "Thought" chip.
+  const thinkingBlock = documentImpl.createElement('div');
+  thinkingBlock.className = 'thinking-block chat-preview-thinking';
+  thinkingBlock.style.display = 'none';
+  const thinkingTextEl = documentImpl.createElement('div');
+  thinkingTextEl.className = 'thinking-text';
+  thinkingBlock.append(thinkingTextEl);
+  el.append(thinkingBlock);
   el.append(createMarkdownBlock(documentImpl, 'message-content assistant-text markdown-content'));
   return el;
 }
@@ -301,15 +296,16 @@ export function renderChatPreviewState(
   }
 
   state.chatPreviewEl.classList.remove('chat-preview-waiting');
-  const thoughtChip = state.chatPreviewEl.querySelector('.chat-preview-thought');
-  if (thoughtChip) {
-    thoughtChip.style.display = thinkingText.trim() ? '' : 'none';
-  }
-  const thoughtBody = state.chatPreviewEl.querySelector('.chat-preview-thought-body');
+  const thinkingBlock = state.chatPreviewEl.querySelector('.chat-preview-thinking');
+  const thinkingTextEl = state.chatPreviewEl.querySelector(
+    '.chat-preview-thinking .thinking-text',
+  );
   if (thinkingText.trim()) {
-    setMarkdownContent(thoughtBody, renderMarkdown(thinkingText));
-  } else if (thoughtBody) {
-    thoughtBody.innerHTML = '';
+    if (thinkingTextEl) thinkingTextEl.textContent = thinkingText;
+    if (thinkingBlock) thinkingBlock.style.display = '';
+  } else {
+    if (thinkingTextEl) thinkingTextEl.textContent = '';
+    if (thinkingBlock) thinkingBlock.style.display = 'none';
   }
   const content = state.chatPreviewEl.querySelector('.message-content');
   setMarkdownContent(content, renderMarkdown(payload.content));
