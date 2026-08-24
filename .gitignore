@@ -26,3 +26,6 @@ e2e/scripts/shot-clip.mjs
 .env
 __pycache__/
 .pi/skills/
+
+# Air hot-reload build artifacts
+/tmp/
