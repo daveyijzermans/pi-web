@@ -24,11 +24,16 @@
   import { t } from '../../shared/i18n.js';
   import * as defaultGitApi from '../../session/chat/git-api.js';
   import { openDirtyFiles } from '../../session/session-modals.svelte.js';
+  import { showToast } from '../../shared/toast.js';
 
   // The branch indicator + smart git action control beneath the chat composer.
   // The bar stays visible (even outside a git repo) because it also hosts the
   // always-available btw button. gitApi is injectable for tests.
   const GIT_REFRESH_MS = 15_000;
+  // Safety net for the fire-and-forget compaction: if no reload/compact-error
+  // SSE arrives within this window (e.g. the worker died), stop the busy state.
+  // Kept above the server-side compactRequestTimeout (5m) so SSE wins normally.
+  const COMPACT_TIMEOUT_MS = 6 * 60_000;
   let {
     sessionId = '',
     gitApi = defaultGitApi,
@@ -263,9 +268,31 @@
     const compactBtn = documentImpl.getElementById('pi-compact-button');
     const compactLabel = documentImpl.getElementById('pi-compact-label');
     let compacting = false;
+    let compactTimer = undefined;
     const setCompactBusy = (busy) => {
       if (compactBtn) compactBtn.disabled = busy;
       if (compactLabel) compactLabel.textContent = busy ? t('git.compacting') : t('git.compact');
+    };
+    // Compaction is fire-and-forget: POST returns 202 immediately and the real
+    // outcome arrives over SSE (a reload on success, a pi-compact-error window
+    // event on failure). finishCompact ends the busy state exactly once for
+    // whichever signal wins (SSE or the safety timeout).
+    const finishCompact = (kind, message) => {
+      if (!compacting) return;
+      compacting = false;
+      setCompactBusy(false);
+      if (compactTimer !== undefined) {
+        wi.clearTimeout?.(compactTimer);
+        compactTimer = undefined;
+      }
+      if (kind === 'error') {
+        const msg = message || t('git.compactFailed');
+        if (compactBtn) compactBtn.title = msg;
+        showToast(msg, { id: 'compact-toast' });
+      } else {
+        if (compactBtn) compactBtn.title = t('git.compact');
+        showToast(t('git.compacted'), { id: 'compact-toast' });
+      }
     };
     if (compactBtn) {
       on(compactBtn, 'click', (e) => {
@@ -273,6 +300,12 @@
         if (compacting) return;
         compacting = true;
         setCompactBusy(true);
+        if (wi.setTimeout) {
+          compactTimer = wi.setTimeout(
+            () => finishCompact('error', t('git.compactFailed')),
+            COMPACT_TIMEOUT_MS,
+          );
+        }
         const doFetch = windowImpl.fetch ?? fetch;
         doFetch('/api/chat/compact?id=' + encodeURIComponent(sessionId), { method: 'POST' })
           .then((resp) =>
@@ -282,15 +315,12 @@
               .then((data) => ({ ok: resp.ok, data })),
           )
           .then(({ ok, data }) => {
+            // 202 = queued; completion is signalled over SSE. Only a synchronous
+            // rejection (bad request, shutting down) is final here.
             if (!ok) throw new Error(data.error || t('git.compactFailed'));
-            compactBtn.title = t('git.compact');
           })
           .catch((err) => {
-            compactBtn.title = String(err && err.message ? err.message : err);
-          })
-          .finally(() => {
-            compacting = false;
-            setCompactBusy(false);
+            finishCompact('error', String(err && err.message ? err.message : err));
           });
       });
     }
@@ -309,16 +339,25 @@
     if (si) intervalId = si(refresh, GIT_REFRESH_MS);
 
     const onSessionReload = () => {
+      // A reload during an active compaction is the compaction landing.
+      finishCompact('success');
       void refresh();
     };
+    const onCompactError = (event) => {
+      const detail = event && event.detail;
+      finishCompact('error', (detail && detail.error) || t('git.compactFailed'));
+    };
     wi.addEventListener?.('pi-session-reload', onSessionReload);
+    wi.addEventListener?.('pi-compact-error', onCompactError);
 
     refresh();
 
     return () => {
       for (const fn of cleanups) fn();
       if (intervalId !== undefined) ci(intervalId);
+      if (compactTimer !== undefined) wi.clearTimeout?.(compactTimer);
       wi.removeEventListener?.('pi-session-reload', onSessionReload);
+      wi.removeEventListener?.('pi-compact-error', onCompactError);
     };
   });
 </script>

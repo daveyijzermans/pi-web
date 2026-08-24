@@ -168,6 +168,21 @@ export function wireSessionEvents({
       }
     });
   }
+  // A manual compaction failed server-side. Compaction is fire-and-forget, so
+  // the only way the footer/composer learns of a failure is this event; relay
+  // it as a window event carrying the error message so listeners can toast it.
+  eventSource.addEventListener('compact-error', (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      if (windowImpl && CustomEventImpl) {
+        windowImpl.dispatchEvent(
+          new CustomEventImpl('pi-compact-error', { detail: payload }),
+        );
+      }
+    } catch (error) {
+      onError(error);
+    }
+  });
   eventSource.onerror = onError;
   return eventSource;
 }

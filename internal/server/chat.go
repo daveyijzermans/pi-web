@@ -140,9 +140,11 @@ func (s *Server) readSessionStatus(sessionID string) *workers.WorkerStatus {
 const compactRequestTimeout = 5 * time.Minute
 
 // handleCompact triggers a manual compaction of the session context via the
-// pi RPC worker. It blocks until pi finishes (or fails) so the frontend can
-// surface the result directly. On success it broadcasts a reload so the
-// transcript re-renders with the compaction summary.
+// pi RPC worker. Compaction is a full LLM turn that can outlive a proxy or
+// browser connection timeout, so it runs fire-and-forget: the request returns
+// 202 immediately and completion is signalled over SSE — a "reload" on success
+// (the transcript re-renders with the compaction summary) or a "compact-error"
+// event carrying the failure message.
 func (s *Server) handleCompact(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -160,18 +162,27 @@ func (s *Server) handleCompact(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusServiceUnavailable, "chat unavailable")
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), compactRequestTimeout)
-	defer cancel()
-	if err := s.chatSender.Compact(ctx, resolved.Session.ID, resolved.Path); err != nil {
-		status := http.StatusInternalServerError
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			status = http.StatusRequestTimeout
+	sessionID := resolved.Session.ID
+	sessionPath := resolved.Path
+	if !s.startTask(func(ctx context.Context) {
+		ctx, cancel := context.WithTimeout(ctx, compactRequestTimeout)
+		defer cancel()
+		if err := s.chatSender.Compact(ctx, sessionID, sessionPath); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			fmt.Fprintf(os.Stderr, "compact failed for %s: %v\n", sessionID, err)
+			if msg, ferr := formatSSEJSONEvent("compact-error", map[string]any{"error": err.Error()}); ferr == nil {
+				s.broadcast(sessionID, msg)
+			}
+			return
 		}
-		writeJSONError(w, status, err.Error())
+		s.broadcast(sessionID, "reload")
+	}) {
+		writeJSONError(w, http.StatusServiceUnavailable, "server is shutting down")
 		return
 	}
-	s.broadcast(resolved.Session.ID, "reload")
-	writeJSON(w, 0, map[string]any{"ok": true, "status": "compacted"})
+	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true, "status": "queued"})
 }
 
 func (s *Server) handleCancelChat(w http.ResponseWriter, r *http.Request) {

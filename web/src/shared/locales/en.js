@@ -519,6 +519,7 @@ export default {
   'git.moreActions': 'More git actions',
   'git.compact': 'compact',
   'git.compacting': 'Compacting…',
+  'git.compacted': 'Session compacted',
   'git.compactFailed': 'Compact failed',
   'git.dirty': 'Uncommitted changes',
   'git.ahead': 'Ahead by {n} commits',

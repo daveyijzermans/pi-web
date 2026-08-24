@@ -187,10 +187,10 @@ describe('GitFooter', () => {
       expect(compact.nextElementSibling).toBe(btw);
     });
 
-    it('posts to /api/chat/compact and resets when it succeeds', async () => {
+    it('posts to /api/chat/compact and stays busy (202) until a reload lands', async () => {
       const fetchMock = vi
         .fn()
-        .mockResolvedValue({ ok: true, json: async () => ({ ok: true, status: 'compacted' }) });
+        .mockResolvedValue({ ok: true, json: async () => ({ ok: true, status: 'queued' }) });
       vi.stubGlobal('fetch', fetchMock);
       renderFooter({ getGitInfo: vi.fn().mockResolvedValue({ isRepo: false }) });
       await flush();
@@ -200,14 +200,46 @@ describe('GitFooter', () => {
       await flush();
 
       expect(fetchMock).toHaveBeenCalledWith('/api/chat/compact?id=s', { method: 'POST' });
+      // Fire-and-forget: the 202 leaves the button busy; completion is by SSE.
+      expect(id('pi-compact-button').disabled).toBe(true);
+      expect(id('pi-compact-label').textContent).toBe('Compacting…');
+
+      window.dispatchEvent(new CustomEvent('pi-session-reload'));
+      await flush();
+
       expect(id('pi-compact-button').disabled).toBe(false);
       expect(id('pi-compact-label').textContent).toBe('compact');
     });
 
-    it('shows the worker error in the title when compaction fails', async () => {
+    it('clears busy and shows the error from a pi-compact-error SSE event', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue({ ok: true, json: async () => ({ ok: true, status: 'queued' }) });
+      vi.stubGlobal('fetch', fetchMock);
+      renderFooter({ getGitInfo: vi.fn().mockResolvedValue({ isRepo: false }) });
+      await flush();
+
+      id('pi-compact-button').click();
+      await flush();
+      await flush();
+      expect(id('pi-compact-button').disabled).toBe(true);
+
+      window.dispatchEvent(
+        new CustomEvent('pi-compact-error', {
+          detail: { error: 'Nothing to compact (session too small)' },
+        }),
+      );
+      await flush();
+
+      expect(id('pi-compact-button').title).toBe('Nothing to compact (session too small)');
+      expect(id('pi-compact-button').disabled).toBe(false);
+      expect(id('pi-compact-label').textContent).toBe('compact');
+    });
+
+    it('shows the error in the title when the request is rejected synchronously', async () => {
       const fetchMock = vi.fn().mockResolvedValue({
         ok: false,
-        json: async () => ({ error: 'Nothing to compact (session too small)' }),
+        json: async () => ({ error: 'chat unavailable' }),
       });
       vi.stubGlobal('fetch', fetchMock);
       renderFooter({ getGitInfo: vi.fn().mockResolvedValue({ isRepo: false }) });
@@ -217,7 +249,7 @@ describe('GitFooter', () => {
       await flush();
       await flush();
 
-      expect(id('pi-compact-button').title).toBe('Nothing to compact (session too small)');
+      expect(id('pi-compact-button').title).toBe('chat unavailable');
       expect(id('pi-compact-button').disabled).toBe(false);
       expect(id('pi-compact-label').textContent).toBe('compact');
     });

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -27,6 +28,8 @@ type fakeSender struct {
 	getStateErr    error
 	ensureWorkerCh chan struct{}
 	sendCh         chan struct{}
+	compactCh      chan struct{}
+	compactErr     error
 	commands       []workers.SlashCommand
 	commandsReady  bool
 	commandsErr    error
@@ -111,7 +114,10 @@ func (f *fakeSender) Status(sessionID string) workers.WorkerStatus {
 }
 
 func (f *fakeSender) Compact(ctx context.Context, sessionID, sessionPath string) error {
-	return nil
+	if f.compactCh != nil {
+		f.compactCh <- struct{}{}
+	}
+	return f.compactErr
 }
 
 func (f *fakeSender) HasWorker(sessionID string) bool { return false }
@@ -192,6 +198,71 @@ func TestHandleChatQueuesResolvedSession(t *testing.T) {
 	sentID, sentPath, sentReq := fake.sentInfo()
 	if sentID != "session.jsonl" || sentPath != wantPath || sentReq.Message != "hello" {
 		t.Fatalf("sent id=%q path=%q msg=%q, want path %q", sentID, sentPath, sentReq.Message, wantPath)
+	}
+}
+
+func TestHandleCompactQueuesAndBroadcastsReload(t *testing.T) {
+	root := t.TempDir()
+	writeSessionFile(t, root, "--tmp--project--", "session.jsonl")
+	fake := &fakeSender{compactCh: make(chan struct{}, 1)}
+	s := &Server{sessionsDir: root, chatSender: fake, clients: make([]*sseClient, 0)}
+	client := s.addClient("session.jsonl")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/chat/compact?id=session.jsonl", nil)
+	w := httptest.NewRecorder()
+	s.handleCompact(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status = %d body = %s, want 202", w.Code, w.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["status"] != "queued" {
+		t.Fatalf("status body = %#v, want queued", got)
+	}
+	select {
+	case <-fake.compactCh:
+	case <-time.After(time.Second):
+		t.Fatal("Compact was not called asynchronously")
+	}
+	select {
+	case msg := <-client.ch:
+		if msg != "reload" {
+			t.Fatalf("broadcast = %q, want reload", msg)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no reload broadcast after successful compaction")
+	}
+}
+
+func TestHandleCompactBroadcastsErrorOnFailure(t *testing.T) {
+	root := t.TempDir()
+	writeSessionFile(t, root, "--tmp--project--", "session.jsonl")
+	fake := &fakeSender{compactCh: make(chan struct{}, 1), compactErr: errors.New("nothing to compact")}
+	s := &Server{sessionsDir: root, chatSender: fake, clients: make([]*sseClient, 0)}
+	client := s.addClient("session.jsonl")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/chat/compact?id=session.jsonl", nil)
+	w := httptest.NewRecorder()
+	s.handleCompact(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 (fire-and-forget)", w.Code)
+	}
+	select {
+	case <-fake.compactCh:
+	case <-time.After(time.Second):
+		t.Fatal("Compact was not called")
+	}
+	select {
+	case msg := <-client.ch:
+		if !strings.Contains(msg, "compact-error") || !strings.Contains(msg, "nothing to compact") {
+			t.Fatalf("broadcast = %q, want a compact-error event carrying the message", msg)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no compact-error broadcast after failed compaction")
 	}
 }
 
