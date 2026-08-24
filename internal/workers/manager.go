@@ -24,6 +24,14 @@ type WorkerStatus struct {
 	ModelName     string `json:"modelName,omitempty"`
 	ModelProvider string `json:"modelProvider,omitempty"`
 	ThinkingLevel string `json:"thinkingLevel,omitempty"`
+	// Compacting reports an in-flight manual compaction. It is a form of
+	// "running": the UI blocks new turns and can label the busy state.
+	Compacting bool `json:"compacting,omitempty"`
+	// BlockedReason, when non-empty, is a human-readable explanation of why the
+	// web UI must not start a new turn right now (compaction / an active
+	// terminal turn). Empty means sending is allowed — including type-ahead
+	// while the session's own web worker is running. Server-populated only.
+	BlockedReason string `json:"blockedReason,omitempty"`
 }
 
 // SlashCommand is a slash-invokable command exposed by a pi worker via the

@@ -3,6 +3,7 @@ export function setupWorkerStatusPolling({
   chatApi,
   sessionId = '',
   setStatus = () => {},
+  setBusy = () => {},
   setModelLabel = () => {},
   setThinkingLabel = () => {},
   updateContextUsage = () => {},
@@ -18,6 +19,7 @@ export function setupWorkerStatusPolling({
   let inflight = false;
   let pending = false;
   let lastWorkerState = null;
+  let lastCompacting = false;
 
   async function refresh() {
     if (inflight) {
@@ -37,7 +39,23 @@ export function setupWorkerStatusPolling({
         : '';
       if (apiModelLabel) setKnownModelLabel(apiModelLabel);
       if (data.thinkingLevel) setKnownThinkingLevel(data.thinkingLevel);
-      if (data.state === 'running') setStatus('running', 'running');
+      // blockedReason (compaction / active terminal turn) must block a new
+      // turn; a plain "running" (the session's own web worker) still allows
+      // type-ahead, so only a blockedReason disables the composer.
+      const blockedReason = data.blockedReason || '';
+      setBusy(blockedReason);
+      // Broadcast compaction transitions so the footer's compact button can
+      // reconcile its state (e.g. after a page reload mid-compaction).
+      const compacting = !!data.compacting;
+      if (compacting !== lastCompacting) {
+        lastCompacting = compacting;
+        try {
+          windowImpl.dispatchEvent(new CustomEventImpl('pi-compact-state', { detail: { compacting } }));
+        } catch {
+          // Event construction may be unsupported in some test envs.
+        }
+      }
+      if (data.state === 'running') setStatus(blockedReason || 'running', 'running');
       if (data.state === 'idle') setStatus('idle', '');
       if (data.state === 'error') setStatus(data.error || 'worker error', 'error');
       if (lastWorkerState === 'running' && data.state === 'idle') {

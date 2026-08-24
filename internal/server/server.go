@@ -70,7 +70,10 @@ type Server struct {
 	clientsMu             sync.RWMutex
 	fileMod               map[string]time.Time
 	fileActivity          map[string]time.Time
+	filePath              map[string]string // session id -> absolute jsonl path (for tail reads)
 	fileModMu             sync.RWMutex
+	compacting            map[string]struct{} // sessions with an in-flight manual compaction
+	compactingMu          sync.Mutex
 	chatSender            ChatSender
 	cache                 *sessions.Cache
 	auth                  *auth.Middleware
@@ -156,6 +159,8 @@ func New(deps Deps) (*Server, error) {
 		clients:               make([]*sseClient, 0),
 		fileMod:               make(map[string]time.Time),
 		fileActivity:          make(map[string]time.Time),
+		filePath:              make(map[string]string),
+		compacting:            make(map[string]struct{}),
 		chatSender:            deps.ChatSender,
 		cache:                 deps.Cache,
 		auth:                  deps.Auth,

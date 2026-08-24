@@ -269,42 +269,41 @@
     const compactLabel = documentImpl.getElementById('pi-compact-label');
     let compacting = false;
     let compactTimer = undefined;
+    // True only for a compaction this tab kicked off, so the success toast fires
+    // for the initiator but not for other tabs merely reconciling server state.
+    let compactInitiated = false;
     const setCompactBusy = (busy) => {
       if (compactBtn) compactBtn.disabled = busy;
       if (compactLabel) compactLabel.textContent = busy ? t('git.compacting') : t('git.compact');
     };
-    // Compaction is fire-and-forget: POST returns 202 immediately and the real
-    // outcome arrives over SSE (a reload on success, a pi-compact-error window
-    // event on failure). finishCompact ends the busy state exactly once for
-    // whichever signal wins (SSE or the safety timeout).
-    const finishCompact = (kind, message) => {
-      if (!compacting) return;
+    const clearCompact = () => {
       compacting = false;
       setCompactBusy(false);
       if (compactTimer !== undefined) {
         wi.clearTimeout?.(compactTimer);
         compactTimer = undefined;
       }
-      if (kind === 'error') {
-        const msg = message || t('git.compactFailed');
-        if (compactBtn) compactBtn.title = msg;
-        showToast(msg, { id: 'compact-toast' });
-      } else {
-        if (compactBtn) compactBtn.title = t('git.compact');
-        showToast(t('git.compacted'), { id: 'compact-toast' });
-      }
+    };
+    // Compaction is fire-and-forget: the POST returns 202 and the true state is
+    // driven by worker-status (pi-compact-state) so it reconciles across reloads
+    // and tabs. A pi-compact-error event or the safety timer ends a failure.
+    const failCompact = (message) => {
+      if (!compacting && !compactInitiated) return;
+      clearCompact();
+      const msg = message || t('git.compactFailed');
+      if (compactBtn) compactBtn.title = msg;
+      showToast(msg, { id: 'compact-toast' });
+      compactInitiated = false;
     };
     if (compactBtn) {
       on(compactBtn, 'click', (e) => {
         e.preventDefault();
         if (compacting) return;
         compacting = true;
+        compactInitiated = true;
         setCompactBusy(true);
         if (wi.setTimeout) {
-          compactTimer = wi.setTimeout(
-            () => finishCompact('error', t('git.compactFailed')),
-            COMPACT_TIMEOUT_MS,
-          );
+          compactTimer = wi.setTimeout(() => failCompact(t('git.compactFailed')), COMPACT_TIMEOUT_MS);
         }
         const doFetch = windowImpl.fetch ?? fetch;
         doFetch('/api/chat/compact?id=' + encodeURIComponent(sessionId), { method: 'POST' })
@@ -315,12 +314,12 @@
               .then((data) => ({ ok: resp.ok, data })),
           )
           .then(({ ok, data }) => {
-            // 202 = queued; completion is signalled over SSE. Only a synchronous
-            // rejection (bad request, shutting down) is final here.
+            // 202 = queued; completion is signalled via worker-status. Only a
+            // synchronous rejection (bad request, shutting down) is final here.
             if (!ok) throw new Error(data.error || t('git.compactFailed'));
           })
           .catch((err) => {
-            finishCompact('error', String(err && err.message ? err.message : err));
+            failCompact(String(err && err.message ? err.message : err));
           });
       });
     }
@@ -339,15 +338,34 @@
     if (si) intervalId = si(refresh, GIT_REFRESH_MS);
 
     const onSessionReload = () => {
-      // A reload during an active compaction is the compaction landing.
-      finishCompact('success');
       void refresh();
+    };
+    // Authoritative compaction state from worker-status polling: keeps the
+    // button in sync after a page reload and across tabs, and fires the
+    // success toast for whichever tab started it when it flips off.
+    const onCompactState = (event) => {
+      const active = !!(event && event.detail && event.detail.compacting);
+      if (active) {
+        if (!compacting) {
+          compacting = true;
+          setCompactBusy(true);
+        }
+        return;
+      }
+      if (!compacting && !compactInitiated) return;
+      clearCompact();
+      if (compactInitiated) {
+        if (compactBtn) compactBtn.title = t('git.compact');
+        showToast(t('git.compacted'), { id: 'compact-toast' });
+        compactInitiated = false;
+      }
     };
     const onCompactError = (event) => {
       const detail = event && event.detail;
-      finishCompact('error', (detail && detail.error) || t('git.compactFailed'));
+      failCompact((detail && detail.error) || t('git.compactFailed'));
     };
     wi.addEventListener?.('pi-session-reload', onSessionReload);
+    wi.addEventListener?.('pi-compact-state', onCompactState);
     wi.addEventListener?.('pi-compact-error', onCompactError);
 
     refresh();
@@ -357,6 +375,7 @@
       if (intervalId !== undefined) ci(intervalId);
       if (compactTimer !== undefined) wi.clearTimeout?.(compactTimer);
       wi.removeEventListener?.('pi-session-reload', onSessionReload);
+      wi.removeEventListener?.('pi-compact-state', onCompactState);
       wi.removeEventListener?.('pi-compact-error', onCompactError);
     };
   });

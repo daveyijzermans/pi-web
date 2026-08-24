@@ -128,7 +128,7 @@ func TestRecordModTimeBroadcastsReloadForKnownZeroModTime(t *testing.T) {
 	}
 	client := s.addClient("fresh.jsonl")
 
-	s.recordModTime("fresh.jsonl", time.Date(2026, 5, 8, 11, 0, 0, 0, time.UTC))
+	s.recordModTime("fresh.jsonl", "", time.Date(2026, 5, 8, 11, 0, 0, 0, time.UTC))
 
 	select {
 	case got := <-client.ch:

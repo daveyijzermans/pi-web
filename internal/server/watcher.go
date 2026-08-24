@@ -63,7 +63,7 @@ func (s *Server) scanForChanges() {
 			if err != nil {
 				continue
 			}
-			s.recordModTime(f.Name(), info.ModTime())
+			s.recordModTime(f.Name(), path, info.ModTime())
 		}
 	}
 }
@@ -71,10 +71,13 @@ func (s *Server) scanForChanges() {
 // recordModTime updates the last-known modtime for a session file and
 // broadcasts a reload if it advanced. Shared between the polling and
 // fsnotify paths so file-mod accounting stays consistent.
-func (s *Server) recordModTime(sessID string, mod time.Time) {
+func (s *Server) recordModTime(sessID, path string, mod time.Time) {
 	s.fileModMu.Lock()
 	lastMod, known := s.fileMod[sessID]
 	s.fileMod[sessID] = mod
+	if path != "" && s.filePath != nil {
+		s.filePath[sessID] = path
+	}
 	// Record activity only for a genuine real→newer-real advance.
 	// The zero→first-real transition (file creation) must not count as
 	// running activity to avoid false "done" notifications.
@@ -239,7 +242,7 @@ func (d *debouncer) run(s *Server) {
 			if err != nil {
 				continue
 			}
-			s.recordModTime(filepath.Base(path), info.ModTime())
+			s.recordModTime(filepath.Base(path), path, info.ModTime())
 		case <-d.stopCh:
 			return
 		}

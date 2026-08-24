@@ -61,6 +61,14 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusServiceUnavailable, "chat unavailable")
 		return
 	}
+	// Block a new turn when the session is otherwise busy in a way the web
+	// queue can't own: a web-initiated compaction is tying up the worker, or a
+	// terminal pi process is mid-turn on the same session file. (A busy web
+	// worker is intentionally excluded — that path queues/type-aheads instead.)
+	if reason := s.chatBusyReason(resolved.Session.ID); reason != "" {
+		writeJSONError(w, http.StatusConflict, reason)
+		return
+	}
 	sessionID := resolved.Session.ID
 	sessionPath := resolved.Path
 
@@ -164,7 +172,13 @@ func (s *Server) handleCompact(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID := resolved.Session.ID
 	sessionPath := resolved.Path
+	s.setCompacting(sessionID, true)
+	s.recomputeAndBroadcastStatus(sessionID)
 	if !s.startTask(func(ctx context.Context) {
+		defer func() {
+			s.setCompacting(sessionID, false)
+			s.recomputeAndBroadcastStatus(sessionID)
+		}()
 		ctx, cancel := context.WithTimeout(ctx, compactRequestTimeout)
 		defer cancel()
 		if err := s.chatSender.Compact(ctx, sessionID, sessionPath); err != nil {
@@ -179,6 +193,8 @@ func (s *Server) handleCompact(w http.ResponseWriter, r *http.Request) {
 		}
 		s.broadcast(sessionID, "reload")
 	}) {
+		s.setCompacting(sessionID, false)
+		s.recomputeAndBroadcastStatus(sessionID)
 		writeJSONError(w, http.StatusServiceUnavailable, "server is shutting down")
 		return
 	}
@@ -214,6 +230,7 @@ func (s *Server) handleWorkerStatus(w http.ResponseWriter, r *http.Request) {
 	status := workers.WorkerStatus{State: workers.WorkerStateIdle}
 	if s.computeRunningStatus(sessionID) {
 		status.State = workers.WorkerStateRunning
+		status.Compacting = s.isCompacting(sessionID)
 	} else if s.chatSender != nil {
 		// Do not create/prewarm workers from status polling. A browser can poll
 		// many visible sessions at once; if one pi RPC switch_session hangs, eager
@@ -228,6 +245,9 @@ func (s *Server) handleWorkerStatus(w http.ResponseWriter, r *http.Request) {
 			status.ThinkingLevel = state.ThinkingLevel
 		}
 	}
+	// Tell the composer whether to block a new turn (compaction / terminal turn)
+	// vs. allow it (idle, or type-ahead while its own web worker runs).
+	status.BlockedReason = s.chatBusyReason(sessionID)
 	writeJSON(w, 0, status)
 }
 

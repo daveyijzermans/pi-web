@@ -14,12 +14,16 @@ import (
 // drifting apart.
 //
 // Order matches the historical behaviour of handleWorkerStatus:
-//  1. session-status/<id> file (terminal sessions)
-//  2. in-process chat worker status
-//  3. recent jsonl mtime within recentSessionActivityWindow
+//  1. an in-flight web-initiated compaction
+//  2. session-status/<id> file (terminal sessions)
+//  3. in-process chat worker status
+//  4. terminal turn inferred from the jsonl tail (or recent mtime)
 func (s *Server) computeRunningStatus(sessionID string) bool {
 	if sessionID == "" {
 		return false
+	}
+	if s.isCompacting(sessionID) {
+		return true
 	}
 	if status := s.readSessionStatus(sessionID); status != nil && status.State == workers.WorkerStateRunning {
 		return true
@@ -38,11 +42,17 @@ func (s *Server) computeRunningStatus(sessionID string) bool {
 			return false
 		}
 	}
-	return s.hasRecentSessionActivity(sessionID)
+	// No web worker owns this session: it may be a terminal pi process. Infer
+	// from the jsonl tail (stays lit across a running turn's quiet gaps) and
+	// keep the legacy recent-write window as a fast path.
+	return s.hasActiveTerminalTurn(sessionID) || s.hasRecentSessionActivity(sessionID)
 }
 
 func (s *Server) runningStatusPayload(sessionID string, running bool) map[string]any {
 	payload := map[string]any{"id": sessionID, "running": running}
+	if running && s.isCompacting(sessionID) {
+		payload["compacting"] = true
+	}
 	if s.cache != nil {
 		if project, ok := s.cache.ProjectForID(sessionID); ok && project != "" {
 			payload["project"] = project

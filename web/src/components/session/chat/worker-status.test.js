@@ -160,4 +160,44 @@ describe('setupWorkerStatusPolling', () => {
 
     clearIntervalSpy.mockRestore();
   });
+
+  it('reports blockedReason via setBusy and emits pi-compact-state while compacting', async () => {
+    const windowImpl = new EventTarget();
+    const setBusy = vi.fn();
+    const compactEvents = [];
+    windowImpl.addEventListener('pi-compact-state', (e) => compactEvents.push(e.detail));
+
+    setupWorkerStatusPolling({
+      windowImpl,
+      sessionId: 's',
+      chatApi: {
+        getWorkerStatus: vi.fn(() =>
+          Promise.resolve(
+            response({ state: 'running', compacting: true, blockedReason: 'session is compacting' }),
+          ),
+        ),
+      },
+      setBusy,
+      setIntervalImpl: () => {},
+      CustomEventImpl: CustomEvent,
+    });
+    await tick();
+
+    expect(setBusy).toHaveBeenCalledWith('session is compacting');
+    expect(compactEvents).toEqual([{ compacting: true }]);
+  });
+
+  it('clears busy when the session is idle', async () => {
+    const setBusy = vi.fn();
+    setupWorkerStatusPolling({
+      windowImpl: new EventTarget(),
+      sessionId: 's',
+      chatApi: { getWorkerStatus: vi.fn(() => Promise.resolve(response({ state: 'idle' }))) },
+      setBusy,
+      setIntervalImpl: () => {},
+      CustomEventImpl: CustomEvent,
+    });
+    await tick();
+    expect(setBusy).toHaveBeenCalledWith('');
+  });
 });

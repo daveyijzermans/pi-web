@@ -412,7 +412,7 @@ func (s *Server) handleRenameSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.fileMod != nil {
 		if info, err := os.Stat(resolved.Path); err == nil {
-			s.recordModTime(resolved.Session.ID, info.ModTime())
+			s.recordModTime(resolved.Session.ID, resolved.Path, info.ModTime())
 		}
 	}
 	s.broadcast(resolved.Session.ID, "reload")
@@ -477,7 +477,7 @@ func (s *Server) handleArchiveSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.fileMod != nil {
 		if info, err := os.Stat(resolved.Path); err == nil {
-			s.recordModTime(resolved.Session.ID, info.ModTime())
+			s.recordModTime(resolved.Session.ID, resolved.Path, info.ModTime())
 		}
 	}
 	s.broadcast(resolved.Session.ID, "reload")
@@ -525,7 +525,7 @@ func (s *Server) handleLabelSessionEntry(w http.ResponseWriter, r *http.Request)
 	}
 	if s.fileMod != nil {
 		if info, err := os.Stat(resolved.Path); err == nil {
-			s.recordModTime(resolved.Session.ID, info.ModTime())
+			s.recordModTime(resolved.Session.ID, resolved.Path, info.ModTime())
 		}
 	}
 	s.broadcast(resolved.Session.ID, "reload")

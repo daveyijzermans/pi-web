@@ -142,12 +142,24 @@ export function runChatComposer({
     // Expand/collapse the composer for larger typing area. State persists
     // per-session in localStorage.
     let attachments = { hasAttachments: () => false };
+    // Set by worker-status polling when the session is busy in a way that
+    // blocks a new turn (compaction / active terminal turn). Survives reload
+    // because the first poll runs on mount and reconciles from the server.
+    let busyReason = '';
     const sendState = createComposerSendState({
       textarea,
       sendButton,
       getAttachments: () => attachments,
+      getBusyReason: () => busyReason,
     });
     const updateSendEnabled = sendState.updateSendEnabled;
+    const setBusy = (reason) => {
+      const next = reason || '';
+      if (next === busyReason) return;
+      busyReason = next;
+      if (sendButton) sendButton.title = busyReason || '';
+      updateSendEnabled();
+    };
 
     attachments = setupAttachmentManager({
       documentImpl: document,
@@ -227,6 +239,7 @@ export function runChatComposer({
       chatApi: __piChatApi,
       sessionId,
       setStatus,
+      setBusy,
       setModelLabel,
       setThinkingLabel,
       updateContextUsage,

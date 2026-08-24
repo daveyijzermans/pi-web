@@ -51,6 +51,23 @@ describe('createComposerSendState', () => {
     expect(sendButton.disabled).toBe(true);
   });
 
+  it('disables send while a busy reason is set, even with content', () => {
+    const { textarea, sendButton } = renderComposer('hello');
+    let busy = 'session is compacting';
+    const state = createComposerSendState({
+      textarea,
+      sendButton,
+      getBusyReason: () => busy,
+    });
+
+    state.updateSendEnabled();
+    expect(sendButton.disabled).toBe(true);
+
+    busy = '';
+    state.updateSendEnabled();
+    expect(sendButton.disabled).toBe(false);
+  });
+
   it('does not override transient sending state', () => {
     const { textarea, sendButton } = renderComposer('hello');
     sendButton.dataset.sending = '1';

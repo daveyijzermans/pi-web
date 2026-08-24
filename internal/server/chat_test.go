@@ -205,7 +205,7 @@ func TestHandleCompactQueuesAndBroadcastsReload(t *testing.T) {
 	root := t.TempDir()
 	writeSessionFile(t, root, "--tmp--project--", "session.jsonl")
 	fake := &fakeSender{compactCh: make(chan struct{}, 1)}
-	s := &Server{sessionsDir: root, chatSender: fake, clients: make([]*sseClient, 0)}
+	s := &Server{sessionsDir: root, chatSender: fake, clients: make([]*sseClient, 0), lastKnown: make(map[string]struct{}), now: time.Now}
 	client := s.addClient("session.jsonl")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/chat/compact?id=session.jsonl", nil)
@@ -241,7 +241,7 @@ func TestHandleCompactBroadcastsErrorOnFailure(t *testing.T) {
 	root := t.TempDir()
 	writeSessionFile(t, root, "--tmp--project--", "session.jsonl")
 	fake := &fakeSender{compactCh: make(chan struct{}, 1), compactErr: errors.New("nothing to compact")}
-	s := &Server{sessionsDir: root, chatSender: fake, clients: make([]*sseClient, 0)}
+	s := &Server{sessionsDir: root, chatSender: fake, clients: make([]*sseClient, 0), lastKnown: make(map[string]struct{}), now: time.Now}
 	client := s.addClient("session.jsonl")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/chat/compact?id=session.jsonl", nil)

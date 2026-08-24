@@ -100,7 +100,7 @@ func TestRecordModTimeBroadcastsStatusDelta(t *testing.T) {
 	defer s.removeClient(c)
 
 	// Advance modtime to "now"; this is a recent-activity flip from idle to running.
-	s.recordModTime("session.jsonl", time.Now())
+	s.recordModTime("session.jsonl", "", time.Now())
 
 	// __all__ subscriber now also receives "reload" for any existing-session
 	// modification, followed by the status-delta.
