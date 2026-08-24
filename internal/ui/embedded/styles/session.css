@@ -4314,7 +4314,7 @@
       position: relative;
       flex-shrink: 0;
     }
-    .pi-git-pr-button {
+    .pi-footer-button {
       display: inline-flex;
       align-items: center;
       gap: 4px;
@@ -4328,8 +4328,8 @@
       cursor: pointer;
       transition: color 0.15s, background 0.15s, border-color 0.15s;
     }
-    .pi-git-pr-button:hover,
-    .pi-git-pr-button[aria-expanded="true"] {
+    .pi-footer-button:hover,
+    .pi-footer-button[aria-expanded="true"] {
       color: var(--text);
       background: var(--hover);
       border-color: var(--borderMuted);

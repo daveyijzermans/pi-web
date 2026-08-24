@@ -24,16 +24,12 @@
   import { t } from '../../shared/i18n.js';
   import * as defaultGitApi from '../../session/chat/git-api.js';
   import { openDirtyFiles } from '../../session/session-modals.svelte.js';
-  import { showToast } from '../../shared/toast.js';
+  import CompactButton from './CompactButton.svelte';
 
   // The branch indicator + smart git action control beneath the chat composer.
   // The bar stays visible (even outside a git repo) because it also hosts the
   // always-available btw button. gitApi is injectable for tests.
   const GIT_REFRESH_MS = 15_000;
-  // Safety net for the fire-and-forget compaction: if no reload/compact-error
-  // SSE arrives within this window (e.g. the worker died), stop the busy state.
-  // Kept above the server-side compactRequestTimeout (5m) so SSE wins normally.
-  const COMPACT_TIMEOUT_MS = 6 * 60_000;
   let {
     sessionId = '',
     gitApi = defaultGitApi,
@@ -260,70 +256,6 @@
       });
     });
 
-    // ── Compact button ──
-    // Triggers a manual compaction of the session context via the pi RPC
-    // worker. The request blocks server-side until the summary is generated,
-    // so the button stays busy until the response lands; failures are
-    // surfaced in the button's title.
-    const compactBtn = documentImpl.getElementById('pi-compact-button');
-    const compactLabel = documentImpl.getElementById('pi-compact-label');
-    let compacting = false;
-    let compactTimer = undefined;
-    // True only for a compaction this tab kicked off, so the success toast fires
-    // for the initiator but not for other tabs merely reconciling server state.
-    let compactInitiated = false;
-    const setCompactBusy = (busy) => {
-      if (compactBtn) compactBtn.disabled = busy;
-      if (compactLabel) compactLabel.textContent = busy ? t('git.compacting') : t('git.compact');
-    };
-    const clearCompact = () => {
-      compacting = false;
-      setCompactBusy(false);
-      if (compactTimer !== undefined) {
-        wi.clearTimeout?.(compactTimer);
-        compactTimer = undefined;
-      }
-    };
-    // Compaction is fire-and-forget: the POST returns 202 and the true state is
-    // driven by worker-status (pi-compact-state) so it reconciles across reloads
-    // and tabs. A pi-compact-error event or the safety timer ends a failure.
-    const failCompact = (message) => {
-      if (!compacting && !compactInitiated) return;
-      clearCompact();
-      const msg = message || t('git.compactFailed');
-      if (compactBtn) compactBtn.title = msg;
-      showToast(msg, { id: 'compact-toast' });
-      compactInitiated = false;
-    };
-    if (compactBtn) {
-      on(compactBtn, 'click', (e) => {
-        e.preventDefault();
-        if (compacting) return;
-        compacting = true;
-        compactInitiated = true;
-        setCompactBusy(true);
-        if (wi.setTimeout) {
-          compactTimer = wi.setTimeout(() => failCompact(t('git.compactFailed')), COMPACT_TIMEOUT_MS);
-        }
-        const doFetch = windowImpl.fetch ?? fetch;
-        doFetch('/api/chat/compact?id=' + encodeURIComponent(sessionId), { method: 'POST' })
-          .then((resp) =>
-            resp
-              .json()
-              .catch(() => ({}))
-              .then((data) => ({ ok: resp.ok, data })),
-          )
-          .then(({ ok, data }) => {
-            // 202 = queued; completion is signalled via worker-status. Only a
-            // synchronous rejection (bad request, shutting down) is final here.
-            if (!ok) throw new Error(data.error || t('git.compactFailed'));
-          })
-          .catch((err) => {
-            failCompact(String(err && err.message ? err.message : err));
-          });
-      });
-    }
-
     // ── Dirty files modal trigger ──
     if (branchWrap) {
       on(branchWrap, 'click', (e) => {
@@ -340,43 +272,14 @@
     const onSessionReload = () => {
       void refresh();
     };
-    // Authoritative compaction state from worker-status polling: keeps the
-    // button in sync after a page reload and across tabs, and fires the
-    // success toast for whichever tab started it when it flips off.
-    const onCompactState = (event) => {
-      const active = !!(event && event.detail && event.detail.compacting);
-      if (active) {
-        if (!compacting) {
-          compacting = true;
-          setCompactBusy(true);
-        }
-        return;
-      }
-      if (!compacting && !compactInitiated) return;
-      clearCompact();
-      if (compactInitiated) {
-        if (compactBtn) compactBtn.title = t('git.compact');
-        showToast(t('git.compacted'), { id: 'compact-toast' });
-        compactInitiated = false;
-      }
-    };
-    const onCompactError = (event) => {
-      const detail = event && event.detail;
-      failCompact((detail && detail.error) || t('git.compactFailed'));
-    };
     wi.addEventListener?.('pi-session-reload', onSessionReload);
-    wi.addEventListener?.('pi-compact-state', onCompactState);
-    wi.addEventListener?.('pi-compact-error', onCompactError);
 
     refresh();
 
     return () => {
       for (const fn of cleanups) fn();
       if (intervalId !== undefined) ci(intervalId);
-      if (compactTimer !== undefined) wi.clearTimeout?.(compactTimer);
       wi.removeEventListener?.('pi-session-reload', onSessionReload);
-      wi.removeEventListener?.('pi-compact-state', onCompactState);
-      wi.removeEventListener?.('pi-compact-error', onCompactError);
     };
   });
 </script>
@@ -389,20 +292,17 @@
     ></span><span class="pi-git-status" id="pi-git-status" hidden></span>
   </div>
   <div class="pi-git-right">
-    <button
-      type="button"
-      class="pi-git-pr-button pi-compact-button"
-      id="pi-compact-button"
-      title={t('git.compact')}><span id="pi-compact-label">{t('git.compact')}</span></button
-    ><button type="button" class="pi-git-pr-button pi-btw-button" id="pi-btw-button" title="btw"
+    <CompactButton
+      {sessionId}
+    /><button type="button" class="pi-footer-button pi-btw-button" id="pi-btw-button" title="btw"
       >btw</button
     >
     <div class="pi-git-pr" id="pi-git-pr" hidden>
-      <button type="button" class="pi-git-pr-button pi-git-primary" id="pi-git-primary"
+      <button type="button" class="pi-footer-button pi-git-primary" id="pi-git-primary"
         ><span id="pi-git-primary-label">{t('git.createPr')}</span></button
       ><button
         type="button"
-        class="pi-git-pr-button pi-git-caret"
+        class="pi-footer-button pi-git-caret"
         id="pi-git-caret"
         aria-haspopup="true"
         aria-expanded="false"
