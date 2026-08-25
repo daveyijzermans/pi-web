@@ -3361,6 +3361,20 @@
       display: block;
     }
 
+    /* "Show N more lines" affordance shown under a collapsed output's preview. */
+    .output-expand-hint {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      user-select: none;
+    }
+    .tool-output.expandable:hover .output-expand-hint {
+      text-decoration: underline;
+    }
+    .tool-output.expandable.expanded .output-expand-hint {
+      display: none;
+    }
+
     .ask-question-card {
       display: grid;
       gap: 10px;

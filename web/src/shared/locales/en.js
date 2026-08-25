@@ -247,6 +247,7 @@ export default {
   'session.labelPrompt': 'Label (empty to remove):',
   'session.earlierMessages': 'Earlier messages',
   'session.showingLatestMessages': 'Showing latest {shown} of {total} messages.',
+  'session.toolOutputMore': 'Show {n} more lines',
   'session.loadEarlierCount': 'Load {count} earlier',
   'session.loadingEarlier': 'Loading…',
   'session.loadEarlierFailed': 'Failed to load: {error}',
