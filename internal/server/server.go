@@ -397,7 +397,6 @@ func (s *Server) Register(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("/api/sounds", s.auth.Wrap(s.handleApiSounds))
 	mux.HandleFunc("/sounds/", s.handleSounds)
-	mux.HandleFunc("/api/claude-session", s.auth.Wrap(s.handleClaudeSession))
 	if s.updater != nil {
 		mux.HandleFunc("/api/version", s.auth.Wrap(s.handleVersion))
 		mux.HandleFunc("/api/check-update", s.auth.Wrap(s.handleCheckUpdate))

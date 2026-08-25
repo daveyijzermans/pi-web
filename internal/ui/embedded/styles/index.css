@@ -381,29 +381,6 @@ a { color: inherit; }
     outline-offset: 2px;
 }
 
-/* Per-project "New Claude Session" button — orange, sits left of the + button */
-.project-claude-btn {
-    all: unset;
-    width: 24px;
-    height: 24px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    cursor: pointer;
-    flex-shrink: 0;
-    color: #f97316;
-    transition: background 0.12s, color 0.12s;
-    -webkit-tap-highlight-color: transparent;
-}
-.project-claude-btn:hover {
-    background: color-mix(in srgb, #f97316 12%, transparent);
-}
-.project-claude-btn:focus-visible {
-    outline: 1px solid #f97316;
-    outline-offset: 2px;
-}
-
 /* Per-project "View Project" info button — sits in the project name line */
 .project-view-btn {
     all: unset;

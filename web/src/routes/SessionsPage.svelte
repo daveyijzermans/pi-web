@@ -371,26 +371,6 @@
   onArchiveProject={archiveProject}
   {archivedProjects}
   onNewSession={createSessionForProject}
-  onNewClaudeSession={async (path) => {
-    try {
-      const res = await fetch('/api/claude-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        const msg = data.dev
-          ? 'Claude standby (dry run): ' + JSON.stringify(data.wouldRun)
-          : 'Claude standby session started: ' + (data.result?.target || 'ready');
-        showToast(msg, { id: 'claude-session' });
-      } else {
-        showToast(data.error || 'Failed to start Claude session', { id: 'claude-session' });
-      }
-    } catch (err) {
-      showToast(err.message || 'Network error', { id: 'claude-session' });
-    }
-  }}
   onViewProject={(path) => {
     selectedProjectPath = path;
     projectPanelOpen = true;
