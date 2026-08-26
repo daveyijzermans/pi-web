@@ -872,7 +872,12 @@ body.modal-sheet-open { overflow: hidden; }
 .switch input:checked + .switch-slider { background: var(--accent); }
 .switch input:checked + .switch-slider::before { transform: translateX(16px); background: var(--body-bg); }
 .switch input:focus-visible + .switch-slider { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
-.projects-config.filter-off { opacity: 0.5; }
+/* Filter off: dim only the filter controls (the enable checkboxes, the
+   name-toggle, and select/deselect-all) so it reads as "filtering inactive"
+   without making the per-row management actions look disabled. */
+.projects-config.filter-off .projects-bulk-btn,
+.projects-config.filter-off .project-row input[type='checkbox'],
+.projects-config.filter-off .project-row-name { opacity: 0.5; }
 .projects-toolbar {
     display: flex;
     align-items: stretch;
