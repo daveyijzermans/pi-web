@@ -92,6 +92,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	s.markWebTurnActive(sessionID)
 	if !s.startTask(func(ctx context.Context) {
 		if err := s.chatSender.Send(ctx, sessionID, sessionPath, chatReq); err != nil && !errors.Is(err, context.Canceled) {
 			fmt.Fprintf(os.Stderr, "chat send failed for %s: %v\n", sessionID, err)

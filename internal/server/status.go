@@ -42,6 +42,12 @@ func (s *Server) computeRunningStatus(sessionID string) bool {
 			return false
 		}
 	}
+	// A turn orphaned by a previous instance's restart has no live writer: its
+	// mid-turn tail is stale, not running. Report idle so it neither shows a
+	// phantom "working" indicator nor fires a false done notification.
+	if s.isOrphanedWebTurn(sessionID) {
+		return false
+	}
 	// No web worker owns this session: it may be a terminal pi process. Infer
 	// from the jsonl tail (stays lit across a running turn's quiet gaps) and
 	// keep the legacy recent-write window as a fast path.
@@ -100,6 +106,12 @@ func (s *Server) recomputeAndBroadcastStatus(sessionID string) {
 		delete(s.lastKnown, sessionID)
 	}
 	s.lastKnownMu.Unlock()
+
+	// A turn that reached running → idle is complete: drop its web-turn marker
+	// so a later restart never re-reads it as orphaned.
+	if was && !now {
+		s.clearWebTurn(sessionID)
+	}
 
 	data, _ := json.Marshal(s.runningStatusPayload(sessionID, now))
 	s.broadcast(globalSessID, "event: status-delta\ndata: "+string(data))

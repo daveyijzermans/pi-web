@@ -152,6 +152,7 @@ func (d *queueDrainer) drainSession(sessionID string) {
 		return
 	}
 	req := chat.Request{Message: item.Message}
+	d.server.markWebTurnActive(sessionID)
 	d.server.startTask(func(taskCtx context.Context) {
 		ctx, cancel := context.WithTimeout(taskCtx, d.dispatchTimeout)
 		defer cancel()

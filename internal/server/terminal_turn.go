@@ -81,10 +81,16 @@ func (s *Server) chatBusyReason(sessionID string) string {
 	if s.chatSender != nil && s.chatSender.HasWorker(sessionID) {
 		return ""
 	}
+	// A turn this instance inherited as orphaned (its web worker died on a
+	// previous restart) has no live writer behind it, so a new Send can safely
+	// take the session back over instead of being wedged as a terminal turn.
+	if s.isOrphanedWebTurn(sessionID) {
+		return ""
+	}
 	// Only block when the assistant is clearly mid-response (a bare pending user
 	// message is too ambiguous to reject a web turn over).
 	if s.hasActiveTerminalTurn(sessionID) {
-		return "a terminal session is running a turn here—try again once it finishes"
+		return "terminal session is running"
 	}
 	return ""
 }

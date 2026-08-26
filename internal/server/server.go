@@ -74,6 +74,9 @@ type Server struct {
 	fileModMu             sync.RWMutex
 	compacting            map[string]struct{} // sessions with an in-flight manual compaction
 	compactingMu          sync.Mutex
+	orphanedWebTurns      map[string]struct{} // sessions left mid-web-turn by a previous instance (worker died on restart)
+	orphanLoadedAt        time.Time           // when the orphaned set was seeded at startup
+	orphanedMu            sync.Mutex
 	chatSender            ChatSender
 	cache                 *sessions.Cache
 	auth                  *auth.Middleware
@@ -161,6 +164,7 @@ func New(deps Deps) (*Server, error) {
 		fileActivity:          make(map[string]time.Time),
 		filePath:              make(map[string]string),
 		compacting:            make(map[string]struct{}),
+		orphanedWebTurns:      make(map[string]struct{}),
 		chatSender:            deps.ChatSender,
 		cache:                 deps.Cache,
 		auth:                  deps.Auth,
@@ -199,6 +203,7 @@ func New(deps Deps) (*Server, error) {
 	}
 	s.watchFiles()
 	s.migrateProjectPaths()
+	s.loadOrphanedWebTurns()
 	if err := s.startSessionStatusWatcher(); err != nil {
 		fmt.Fprintf(os.Stderr, "session-status watcher unavailable: %v\n", err)
 	}
