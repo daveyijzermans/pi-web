@@ -655,6 +655,16 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if body.Action == "delete-sessions" {
+		deleted, err := s.deleteProjectSessions(path)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "failed to delete sessions: "+err.Error())
+			return
+		}
+		writeJSON(w, 0, map[string]any{"ok": true, "path": path, "deleted": deleted})
+		return
+	}
+
 	now := s.now()
 	var err error
 	switch body.Action {
@@ -672,6 +682,9 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 			ON CONFLICT(project_path) DO UPDATE SET enabled=1, updated_at=excluded.updated_at`, path, now)
 	case "remove":
 		_, err = s.db.Exec("DELETE FROM project_prefs WHERE project_path = ?", path)
+		if err == nil {
+			_, _ = s.db.Exec("DELETE FROM projects WHERE project_path = ?", path)
+		}
 	default:
 		writeJSONError(w, http.StatusBadRequest, "unknown action")
 		return
@@ -681,6 +694,42 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 0, map[string]any{"ok": true, "path": path})
+}
+
+// deleteProjectSessions deletes every session file whose project matches path,
+// evicting each from the cache and broadcasting a delete so open clients update.
+// Its project_prefs/projects rows are left intact — the project simply drops to
+// zero sessions; use the "remove" action to drop it from the list. Returns the
+// number of sessions deleted.
+func (s *Server) deleteProjectSessions(path string) (int, error) {
+	summaries, err := s.loadSummaries()
+	if err != nil {
+		return 0, err
+	}
+	deleted := 0
+	for _, sum := range summaries {
+		if sum.Project != path {
+			continue
+		}
+		var resolved sessions.ResolvedSession
+		if s.cache != nil {
+			resolved, err = s.cache.Resolve(s.sessionsDir, sum.ID)
+		} else {
+			resolved, err = sessions.ResolveByID(s.sessionsDir, sum.ID)
+		}
+		if err != nil {
+			return deleted, err
+		}
+		if err := sessions.DeleteSession(resolved.Path); err != nil {
+			return deleted, err
+		}
+		if s.cache != nil {
+			s.cache.Remove(resolved.Session.ID)
+		}
+		s.broadcast(resolved.Session.ID, "deleted")
+		deleted++
+	}
+	return deleted, nil
 }
 
 // setAllProjectsEnabled flips every known project (discovered ∪ registered) to

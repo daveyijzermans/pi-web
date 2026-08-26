@@ -70,6 +70,11 @@ export default {
   'index.unarchiveProject': 'Unarchive project',
   'index.archivedProjectsCount': '{count} archived projects',
   'index.removeProject': 'Remove',
+  'index.deleteAllSessions': 'Delete all sessions',
+  'index.confirmDeleteAllSessions':
+    'Delete all {count} sessions in this project? This cannot be undone.',
+  'index.confirmRemoveProject': 'Remove this project from the list?',
+  'index.failedDeleteSessions': 'Failed to delete sessions',
   'index.enterPath': 'Please enter a path',
   'index.failedCreateSession': 'Failed to create session',
   'index.networkError': 'Network error',

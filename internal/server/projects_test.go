@@ -302,6 +302,51 @@ func TestHandleApiProjects(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateProject_DeleteSessions(t *testing.T) {
+	sessionsDir := t.TempDir()
+	writeSessionWithCWD(t, filepath.Join(sessionsDir, "sub1"), "a.jsonl", "/home/user/project-a")
+	writeSessionWithCWD(t, filepath.Join(sessionsDir, "sub1"), "b.jsonl", "/home/user/project-a")
+	writeSessionWithCWD(t, filepath.Join(sessionsDir, "sub2"), "c.jsonl", "/home/user/project-b")
+
+	s := &Server{db: newProjectPrefsDB(t), sessionsDir: sessionsDir, cache: sessions.NewCache(), now: time.Now}
+
+	body, _ := json.Marshal(map[string]string{"path": "/home/user/project-a", "action": "delete-sessions"})
+	req := httptest.NewRequest(http.MethodPost, "/api/projects", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	s.handleUpdateProject(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete-sessions status = %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		OK      bool `json:"ok"`
+		Deleted int  `json:"deleted"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK || resp.Deleted != 2 {
+		t.Fatalf("want 2 deleted, got %+v", resp)
+	}
+
+	// project-a's files are gone; project-b's session survives.
+	if _, err := os.Stat(filepath.Join(sessionsDir, "sub1", "a.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("a.jsonl should be deleted, stat err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(sessionsDir, "sub2", "c.jsonl")); err != nil {
+		t.Fatalf("project-b session should survive, got %v", err)
+	}
+
+	summaries, err := s.loadSummaries()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sum := range summaries {
+		if sum.Project == "/home/user/project-a" {
+			t.Fatalf("project-a sessions should be gone, found %s", sum.ID)
+		}
+	}
+}
+
 func TestHandleApiProjectsFiltered(t *testing.T) {
 	sessionsDir := t.TempDir()
 	writeSessionWithCWD(t, filepath.Join(sessionsDir, "sub1"), "a.jsonl", "/home/user/project-a")

@@ -236,6 +236,26 @@
     }
   }
 
+  async function deleteProjectSessions(path, count) {
+    if (!window.confirm(t('index.confirmDeleteAllSessions', { count }))) return;
+    projectsBusy = true;
+    projectsError = '';
+    try {
+      await defaultUpdateProject(path, 'delete-sessions');
+      await refreshSessions();
+      await refreshProjectsList();
+    } catch (error) {
+      projectsError = error.message || t('index.failedDeleteSessions');
+    } finally {
+      projectsBusy = false;
+    }
+  }
+
+  function removeProject(path) {
+    if (!window.confirm(t('index.confirmRemoveProject'))) return;
+    updateProject(path, 'remove');
+  }
+
   function openPalette() {
     openSessionPalette();
   }
@@ -398,7 +418,8 @@
   onToggleAll={(enabled) => updateProject('', enabled ? 'enable-all' : 'disable-all')}
   onToggleFilter={(enabled) => updateProject('', enabled ? 'enable-filter' : 'disable-filter')}
   onRegister={(path) => updateProject(path, 'register')}
-  onRemove={(path) => updateProject(path, 'remove')}
+  onRemove={removeProject}
+  onDeleteSessions={deleteProjectSessions}
 />
 
 <ProjectPanel bind:open={projectPanelOpen} projectPath={selectedProjectPath} />

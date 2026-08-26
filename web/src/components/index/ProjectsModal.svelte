@@ -14,6 +14,7 @@
     onToggleFilter = async () => {},
     onRegister = async () => {},
     onRemove = async () => {},
+    onDeleteSessions = async () => {},
   } = $props();
 
   let query = $state('');
@@ -121,7 +122,16 @@
                 ><bdi>{project.path}</bdi></button
               >
               <span class="project-row-count">{sessionsCountLabel(project.sessionCount || 0)}</span>
-              {#if project.source === 'registered'}
+              {#if project.sessionCount > 0}
+                <button
+                  type="button"
+                  class="project-row-remove"
+                  disabled={busy}
+                  onclick={() => onDeleteSessions(project.path, project.sessionCount)}
+                  >{t('index.deleteAllSessions')}</button
+                >
+              {/if}
+              {#if project.source === 'registered' || project.sessionCount === 0}
                 <button
                   type="button"
                   class="project-row-remove"
