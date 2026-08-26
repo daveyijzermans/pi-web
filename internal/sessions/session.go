@@ -672,48 +672,29 @@ func decodeWindowsBody(s string) (string, bool) {
 	return "", false
 }
 
-// EncodeProjectName converts an absolute filesystem path into a safe
-// directory name.  It matches pi's encoding so that sessions created by
-// pi-web are discoverable by pi --resume and vice versa.
+// EncodeProjectName converts an absolute filesystem path into the session
+// directory name, matching pi's encoding verbatim (dist/core/session-manager.js:
+// strip one leading separator, then map every /, \ and : to -). A session
+// pi-web creates therefore lands in the same directory pi uses, so
+// pi --session / --resume / -c find it in the cwd instead of offering to fork
+// it into a new project.
 //
-
-//	/home/user/my-project → --home_-user_-my-project--
-//	/home/user/_cache    → --home_-user_-__cache--
+//	/home/user/my-project → --home-user-my-project--
+//	C:\Users\me\proj       → --C--Users-me-proj--
 //
-// Windows-shaped paths (drive letter or backslashes) instead mirror pi's own
-// encoding (dist/core/session-manager.js: strip one leading separator, then
-// map every /, \ and : to -), because the escape-based scheme would leave
-// : and \ in the name — both invalid in Windows directory names.
-//
-//	C:\Users\me\proj → --C--Users-me-proj--
-//
-// Algorithm mirrors pi's session-manager.js.
+// pi's scheme is intentionally lossy: a literal - is indistinguishable from a
+// separator, so DecodeProjectName cannot always recover the original path. That
+// is fine — a session's project is read from its header cwd, and resolveLocation
+// falls back to that cwd whenever a decoded directory name does not exist on
+// disk. (Legacy directories written by the older escape-based encoding, which
+// used _ as a sentinel and _- for /, are still decoded by DecodeProjectName.)
 func EncodeProjectName(path string) string {
 	s := strings.TrimSpace(path)
-	if isWindowsPath(s) {
-		if len(s) > 0 && (s[0] == '/' || s[0] == '\\') {
-			s = s[1:]
-		}
-		s = strings.NewReplacer("/", "-", `\`, "-", ":", "-").Replace(s)
-		return "--" + s + "--"
+	if len(s) > 0 && (s[0] == '/' || s[0] == '\\') {
+		s = s[1:]
 	}
-	s = strings.Trim(s, "/")
-	// Escape _ first, then /.  Order matters: we must double _ before we
-	// introduce any new _ in the / escape sequence.
-	s = strings.ReplaceAll(s, "_", "__")
-	s = strings.ReplaceAll(s, "/", "_-")
+	s = strings.NewReplacer("/", "-", `\`, "-", ":", "-").Replace(s)
 	return "--" + s + "--"
-}
-
-// isWindowsPath reports whether path is Windows-shaped: a drive letter
-// ("C:...") or any backslash separator. Keying off the path's shape rather
-// than runtime.GOOS keeps the encoding deterministic and testable everywhere.
-func isWindowsPath(path string) bool {
-	if len(path) >= 2 && path[1] == ':' &&
-		(('A' <= path[0] && path[0] <= 'Z') || ('a' <= path[0] && path[0] <= 'z')) {
-		return true
-	}
-	return strings.Contains(path, `\`)
 }
 
 // DecodeProjectName reverses EncodeProjectName.  It accepts both the

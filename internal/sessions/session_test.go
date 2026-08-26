@@ -20,14 +20,16 @@ func TestEncodeProjectName(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"/Users/setkyar", "--Users_-setkyar--"},
-		{"/home/user/project", "--home_-user_-project--"},
-		{"/a/b/c/d", "--a_-b_-c_-d--"},
-		{"/Users/setkyar/pi-web", "--Users_-setkyar_-pi-web--"},
-		{"/Users/setkyar/my-project", "--Users_-setkyar_-my-project--"},
-		{"/Users/setkyar/_cache", "--Users_-setkyar_-__cache--"},
-		{"/a/_b/_c", "--a_-__b_-__c--"},
-		// Windows-shaped paths mirror pi's encoding (/, \ and : all map to -)
+		// pi's scheme: strip one leading separator, map / \ : to -. Hyphens and
+		// underscores pass through as literal characters (lossy but pi-compatible).
+		{"/Users/setkyar", "--Users-setkyar--"},
+		{"/home/user/project", "--home-user-project--"},
+		{"/a/b/c/d", "--a-b-c-d--"},
+		{"/Users/setkyar/pi-web", "--Users-setkyar-pi-web--"},
+		{"/Users/setkyar/my-project", "--Users-setkyar-my-project--"},
+		{"/Users/setkyar/_cache", "--Users-setkyar-_cache--"},
+		{"/a/_b/_c", "--a-_b-_c--"},
+		// Windows-shaped paths encode identically (/, \ and : all map to -)
 		// so the result is a valid Windows directory name.
 		{`C:\Users\me\proj`, "--C--Users-me-proj--"},
 		{`c:\work`, "--c--work--"},
@@ -72,15 +74,14 @@ func TestDecodeProjectName(t *testing.T) {
 }
 
 func TestEncodeDecodeRoundTrip(t *testing.T) {
+	// pi's encoding round-trips only paths whose components carry no literal -
+	// or _ (those are indistinguishable from the / separator after encoding).
+	// Hyphenated/underscored projects rely on the header-cwd fallback in
+	// resolveLocation instead, so they are intentionally excluded here.
 	paths := []string{
 		"/Users/setkyar",
 		"/home/user/project",
 		"/a/b/c/d",
-		"/Users/setkyar/my-project",
-		"/Users/setkyar/_cache",
-		"/a/_b/_c",
-		"/project-with-hyphens/sub_dir",
-		"/underscore_test/path",
 	}
 	for _, p := range paths {
 		encoded := EncodeProjectName(p)
