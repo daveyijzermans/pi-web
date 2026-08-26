@@ -308,7 +308,8 @@ func TestCreateSessionFileRejectsRelativePath(t *testing.T) {
 
 func TestRenameSessionAppendsSessionInfo(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "s.jsonl")
-	content := `{"type":"session","name":"Old Name","timestamp":"2026-05-08T10:00:00Z"}` + "\n"
+	content := `{"type":"session","name":"Old Name","timestamp":"2026-05-08T10:00:00Z"}` + "\n" +
+		`{"type":"message","id":"leaf1","parentId":null,"timestamp":"2026-05-08T10:00:01Z","message":{"role":"user","content":"hello"}}` + "\n"
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -322,10 +323,25 @@ func TestRenameSessionAppendsSessionInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := string(data)
-	wantLine := `{"type":"session_info","timestamp":"2026-05-08T10:01:02Z","name":"New Name"}`
-	if !strings.Contains(got, wantLine+"\n") {
-		t.Fatalf("appended content = %q, want line %q", got, wantLine)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	var entry map[string]any
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &entry); err != nil {
+		t.Fatal(err)
+	}
+	if entry["type"] != "session_info" || entry["name"] != "New Name" || entry["timestamp"] != "2026-05-08T10:01:02Z" {
+		t.Fatalf("appended entry = %#v", entry)
+	}
+	// The entry must be threaded onto the current leaf: pi's session loader
+	// takes the file's last entry as the active leaf on resume, so an id-less
+	// session_info would fork the next message onto a new empty root branch.
+	if id, _ := entry["id"].(string); id == "" {
+		t.Fatalf("appended entry lacks id: %#v", entry)
+	}
+	if entry["parentId"] != "leaf1" {
+		t.Fatalf("parentId = %#v, want leaf1", entry["parentId"])
+	}
+	if _, ok := entry["autoTitle"]; ok {
+		t.Fatalf("manual rename should omit autoTitle: %#v", entry)
 	}
 	s, err := ParseSummary(path, "--proj--", "s.jsonl")
 	if err != nil {

@@ -500,16 +500,35 @@ func appendSessionName(path, name string, auto bool, now func() time.Time) error
 		now = time.Now
 	}
 
-	entry := struct {
-		Type      string `json:"type"`
-		Timestamp string `json:"timestamp"`
-		Name      string `json:"name"`
-		AutoTitle bool   `json:"autoTitle,omitempty"`
-	}{
-		Type:      "session_info",
-		Timestamp: now().UTC().Format(time.RFC3339),
-		Name:      name,
-		AutoTitle: auto,
+	// Thread the session_info entry onto the current leaf, giving it an id and
+	// parentId (like ArchiveSession / pi's own appendSessionInfo). If it were
+	// left id-less as the file's last entry, pi's session loader would set the
+	// active leaf to its undefined id and resume the worker on a new root
+	// branch — a rename followed by a worker restart would "forget" the whole
+	// conversation.
+	entries, err := loadEntriesFromFile(path)
+	if err != nil {
+		return err
+	}
+	var parentID any
+	for _, e := range entries {
+		if id, _ := e["id"].(string); id != "" {
+			parentID = id
+		}
+	}
+	entryID, err := randomEntryID()
+	if err != nil {
+		return err
+	}
+	entry := map[string]any{
+		"type":      "session_info",
+		"id":        entryID,
+		"parentId":  parentID,
+		"timestamp": now().UTC().Format(time.RFC3339),
+		"name":      name,
+	}
+	if auto {
+		entry["autoTitle"] = true
 	}
 	data, err := json.Marshal(entry)
 	if err != nil {

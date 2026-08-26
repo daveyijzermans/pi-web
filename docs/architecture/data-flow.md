@@ -15,7 +15,7 @@ Sessions are stored as **JSONL** files (one JSON object per line):
 {"type":"session","version":3,"id":"uuid","timestamp":"2026-01-15T10:30:00Z","cwd":"/Users/me/project","name":"My Session"}
 {"type":"message","timestamp":"2026-01-15T10:30:01Z","message":{"role":"user","content":"Hello"}}
 {"type":"message","timestamp":"2026-01-15T10:30:05Z","message":{"role":"assistant","content":"Hi!"},"usage":{"totalTokens":42,"cost":{"total":0.0001}}}
-{"type":"session_info","timestamp":"2026-01-15T10:30:06Z","name":"Renamed Session"}
+{"type":"session_info","id":"a1b2c3d4","parentId":"e5f6a7b8","timestamp":"2026-01-15T10:30:06Z","name":"Renamed Session"}
 {"type":"tool_call","timestamp":"2026-01-15T10:30:06Z","tool":"bash","command":"ls -la"}
 {"type":"tool_result","timestamp":"2026-01-15T10:30:07Z","tool":"bash","output":"..."}
 {"type":"branch_summary","timestamp":"2026-01-15T10:35:00Z","branch":"main","summary":"..."}
@@ -154,7 +154,9 @@ Browser POST /api/rename-session?id=<id>
            ├──▶ Decode JSON body → {"name":"New Name"}
            ├──▶ Resolve session ID → filesystem path
            ├──▶ sessions.RenameSession(path, name, now)
-           │         └──▶ Append JSONL line: {"type":"session_info","timestamp":"...","name":"New Name"}
+           │         └──▶ Append JSONL line: {"type":"session_info","id":"...","parentId":"<current leaf>","timestamp":"...","name":"New Name"}
+           │              (threaded onto the leaf like archive/label entries — an id-less last
+           │               entry would make pi resume the worker on a new empty root branch)
            ├──▶ record modtime + broadcast "reload" to session SSE clients
            │
            └──▶ Return {"ok": true, "name": "New Name"}
