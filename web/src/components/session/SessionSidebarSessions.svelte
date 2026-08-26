@@ -24,6 +24,8 @@
   import { prefetchSession } from '../../routes/session-prefetch.js';
   import { getSpinnerConfig } from '../../session/live/chat-preview.js';
   import { sessionRuntime } from '../../session/session-runtime.js';
+  import { createStatusEvents } from '../../shared/status-events.js';
+  import { SvelteSet } from 'svelte/reactivity';
 
   let {
     cwd = '',
@@ -58,8 +60,9 @@
   let sessionSearchTimer = null;
 
   const pageSize = 20;
-  const activeSessionCat = getSpinnerConfig(null);
-  const activeSessionCatStyle = `font-family:${activeSessionCat.fontFamily}`;
+  const activeSessionCatResting = getSpinnerConfig(null);
+  let activeSessionCatChar = $state(activeSessionCatResting.frames[0] || '');
+  let activeSessionCatStyle = $state(`font-family:${activeSessionCatResting.fontFamily}`);
   const projectName = $derived(
     selectedProject.split(/[\\/]/).filter(Boolean).at(-1) || selectedProject,
   );
@@ -92,8 +95,13 @@
     if (sessionId) prefetchSession(sessionId);
   }
 
+  // The session view never passes runningSessionIds, so self-observe the same
+  // status SSE the index uses. When a parent does supply the prop, defer to it.
+  const observedRunningSessionIds = new SvelteSet();
+  const effectiveRunningSessionIds = $derived(runningSessionIds || observedRunningSessionIds);
+
   function isRunning(sessionId) {
-    return !!runningSessionIds?.has(sessionId);
+    return !!effectiveRunningSessionIds.has(sessionId);
   }
 
   async function loadProjectSessions(
@@ -181,7 +189,7 @@
   }
 
   $effect(() => {
-    if (!runningSessionIds?.size) {
+    if (!effectiveRunningSessionIds.size) {
       spinnerChar = '';
       spinnerStyle = '';
       return;
@@ -194,6 +202,25 @@
     const timer = window.setInterval(() => {
       frame = (frame + 1) % config.frames.length;
       spinnerChar = config.frames[frame] || '';
+    }, config.interval);
+    return () => window.clearInterval(timer);
+  });
+
+  // The active session's own cat runs (cycles the runcat frames) while its
+  // turn is running and rests on the first frame when idle, so the open
+  // session gets the same running-cat cue as the other rows' spinner.
+  $effect(() => {
+    const config = getSpinnerConfig(typeof window !== 'undefined' ? window : null);
+    activeSessionCatStyle = `font-family:${config.fontFamily}`;
+    if (!isRunning(currentSessionId)) {
+      activeSessionCatChar = config.frames[0] || '';
+      return;
+    }
+    let frame = 0;
+    activeSessionCatChar = config.frames[0] || '';
+    const timer = window.setInterval(() => {
+      frame = (frame + 1) % config.frames.length;
+      activeSessionCatChar = config.frames[frame] || '';
     }, config.interval);
     return () => window.clearInterval(timer);
   });
@@ -222,12 +249,27 @@
     document.addEventListener('click', onDocumentClick);
     document.addEventListener('keydown', onDocumentKeydown);
 
+    const statusEvents = runningSessionIds
+      ? null
+      : createStatusEvents({
+          onSnapshot: ({ ids }) => {
+            observedRunningSessionIds.clear();
+            for (const id of ids) observedRunningSessionIds.add(id);
+          },
+          onDelta: ({ id, running }) => {
+            if (running) observedRunningSessionIds.add(id);
+            else observedRunningSessionIds.delete(id);
+          },
+        });
+    statusEvents?.connect();
+
     return () => {
       sessionLoadGeneration += 1;
       if (sessionSearchTimer) clearTimeout(sessionSearchTimer);
       clearInterval(timer);
       document.removeEventListener('click', onDocumentClick);
       document.removeEventListener('keydown', onDocumentKeydown);
+      statusEvents?.cleanup?.();
     };
   });
 </script>
@@ -302,7 +344,8 @@
                   <span class="sidebar-project-option-path">{t('session.allProjectsHint')}</span>
                 </span>
                 {#if allProjects}
-                  <span class="sidebar-project-option-check">{@html icon(Check, { size: 13 })}</span>
+                  <span class="sidebar-project-option-check">{@html icon(Check, { size: 13 })}</span
+                  >
                 {/if}
               </button>
               {#if filteredProjects.length === 0}
@@ -311,8 +354,7 @@
                 </div>
               {:else}
                 {#each filteredProjects as project (project.path)}
-                  {@const name =
-                    project.path.split(/[\\/]/).filter(Boolean).at(-1) || project.path}
+                  {@const name = project.path.split(/[\\/]/).filter(Boolean).at(-1) || project.path}
                   <button
                     type="button"
                     class="sidebar-project-option"
@@ -375,7 +417,7 @@
             class:sidebar-session-indicator--running={isRunning(session.id)}
             aria-hidden={isRunning(session.id) ? undefined : 'true'}
             aria-label={isRunning(session.id) ? t('index.active') : undefined}
-            style={activeSessionCatStyle}>{activeSessionCat.frames[0]}</span
+            style={activeSessionCatStyle}>{activeSessionCatChar}</span
           >
         {/if}
         {#if isRunning(session.id) && !activeSession}

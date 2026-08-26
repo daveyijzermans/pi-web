@@ -50,6 +50,35 @@ describe('SessionSidebarSessions', () => {
     expect(activeIndicator).toHaveClass('sidebar-session-indicator--running');
   });
 
+  it('runs (animates) the active session cat while its own turn is running', async () => {
+    const fetchSessions = vi.fn().mockResolvedValue({
+      sessions: [
+        {
+          ID: 'current.jsonl',
+          Name: 'Current work',
+          Project: '/repo/pi-web',
+          LastActivity: '2026-07-28T10:00:00Z',
+        },
+      ],
+    });
+
+    const { container } = render(SessionSidebarSessions, {
+      props: {
+        cwd: '/repo/pi-web',
+        currentSessionId: 'current.jsonl',
+        fetchSessions,
+        runningSessionIds: new Set(['current.jsonl']),
+      },
+    });
+
+    await screen.findByRole('link', { name: /Current work/ });
+    const indicator = container.querySelector('.sidebar-session-indicator');
+    const firstFrame = indicator.textContent;
+    // The runcat frames cycle on an interval, so the glyph must change over
+    // time — a static frame would mean the running cat isn't running.
+    await waitFor(() => expect(indicator.textContent).not.toBe(firstFrame), { timeout: 2000 });
+  });
+
   it('switches the sidebar to sessions from a selected project', async () => {
     const user = userEvent.setup();
     const fetchSessions = vi.fn(({ project }) =>
@@ -135,9 +164,7 @@ describe('SessionSidebarSessions', () => {
     await user.click(screen.getByRole('button', { name: /Current project pi-web/ }));
     await user.click(screen.getByRole('button', { name: /All projects/ }));
 
-    await waitFor(() =>
-      expect(fetchSessions).toHaveBeenCalledWith({ limit: 20, offset: 0 }),
-    );
+    await waitFor(() => expect(fetchSessions).toHaveBeenCalledWith({ limit: 20, offset: 0 }));
     // Grouped by project → one heading per project, both projects' sessions shown.
     expect(await screen.findByRole('heading', { name: /pi-web/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /other/ })).toBeInTheDocument();
