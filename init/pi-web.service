@@ -10,6 +10,10 @@ ExecStart=/usr/local/bin/pi-web
 Restart=on-failure
 RestartSec=5
 
+# Kill only the server on stop/restart: detached worker-holders (and the pi
+# agents they hold) live in this cgroup and must survive server restarts.
+KillMode=process
+
 # Pass PI_WEB_TOKEN from the environment if set
 EnvironmentFile=-%h/.config/pi-web/env
 
