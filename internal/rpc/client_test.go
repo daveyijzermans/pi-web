@@ -52,6 +52,13 @@ func TestBuildPromptCommandOmitsSteerWhenIdle(t *testing.T) {
 	}
 }
 
+func TestBuildBashCommand(t *testing.T) {
+	cmd := BuildBashCommand("req-2", "src-status", true)
+	if cmd["id"] != "req-2" || cmd["type"] != "bash" || cmd["command"] != "src-status" || cmd["excludeFromContext"] != true {
+		t.Fatalf("cmd = %#v", cmd)
+	}
+}
+
 func TestBuildGetCommandsCommand(t *testing.T) {
 	cmd := BuildGetCommandsCommand("req-7")
 	if cmd["id"] != "req-7" || cmd["type"] != "get_commands" {

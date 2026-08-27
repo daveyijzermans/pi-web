@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os/exec"
 	"strings"
 	"sync"
@@ -22,7 +23,9 @@ type piRPCWorker struct {
 	writeMu              sync.Mutex
 	sessionPath          string
 	startedAt            time.Time
-	cmd                  *exec.Cmd
+	cmd                  *exec.Cmd // set when pi is a direct child (legacy path)
+	conn                 net.Conn  // set when pi lives in a detached worker-holder
+	piPid                int       // pi's pid as reported by the holder
 	stdin                io.WriteCloser
 	status               workers.WorkerStatus
 	seq                  atomic.Uint64
@@ -54,6 +57,9 @@ func (w *piRPCWorker) IdleSince(now time.Time) time.Duration {
 // PID returns the operating-system process ID of the underlying pi worker, or
 // 0 if the process has not started or has already exited.
 func (w *piRPCWorker) PID() int {
+	if w.piPid != 0 {
+		return w.piPid
+	}
 	if w.cmd == nil || w.cmd.Process == nil {
 		return 0
 	}
@@ -116,8 +122,26 @@ func NewPiWorkerWithStream(sessionPath string, streamSink StreamEventSink) (work
 	return worker, nil
 }
 
+// bangCommand interprets "!cmd" / "!!cmd" (excluded from context) as pi's
+// user-bash escape, mirroring the TUI. Attachments force normal prompt handling.
+func bangCommand(chat chat.Request) (command string, excludeFromContext bool, ok bool) {
+	if len(chat.Images) > 0 || len(chat.Files) > 0 || !strings.HasPrefix(chat.Message, "!") {
+		return "", false, false
+	}
+	excludeFromContext = strings.HasPrefix(chat.Message, "!!")
+	command = strings.TrimSpace(strings.TrimLeft(chat.Message, "!"))
+	return command, excludeFromContext, command != ""
+}
+
 func (w *piRPCWorker) Prompt(ctx context.Context, chat chat.Request) error {
 	w.touch()
+	if command, exclude, ok := bangCommand(chat); ok {
+		// No agent turn follows: leave the worker state alone (agent_end never
+		// fires for a user bash). pi appends the bashExecution entry to the
+		// session; the file watcher refreshes the UI. The response arrives only
+		// when the command finishes, so this blocks for its duration.
+		return w.sendAndAwait(ctx, BuildBashCommand(w.nextID(), command, exclude))
+	}
 	w.mu.Lock()
 	streaming := w.status.State == workers.WorkerStateRunning
 	w.status = workers.WorkerStatus{State: workers.WorkerStateRunning}
@@ -340,6 +364,13 @@ func (w *piRPCWorker) Status() workers.WorkerStatus {
 }
 
 func (w *piRPCWorker) Close() error {
+	if w.conn != nil {
+		// Tell the holder to take pi down with it, then drop the conn. Without
+		// this a reaped "idle" worker would keep a detached pi alive forever.
+		w.writeMu.Lock()
+		_ = WriteCommand(w.conn, map[string]any{"type": holderShutdownType})
+		w.writeMu.Unlock()
+	}
 	if w.stdin != nil {
 		_ = w.stdin.Close()
 	}

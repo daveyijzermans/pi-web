@@ -46,6 +46,10 @@ func BuildPromptCommand(id string, chat chat.Request, streaming bool) map[string
 	return cmd
 }
 
+func BuildBashCommand(id, command string, excludeFromContext bool) map[string]any {
+	return map[string]any{"id": id, "type": "bash", "command": command, "excludeFromContext": excludeFromContext}
+}
+
 func BuildGetStateCommand(id string) map[string]any {
 	return map[string]any{"id": id, "type": "get_state"}
 }

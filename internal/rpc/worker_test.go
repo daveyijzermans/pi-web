@@ -3,12 +3,14 @@ package rpc
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"pi-web/internal/chat"
 	"pi-web/internal/workers"
 )
 
@@ -29,6 +31,58 @@ func waitForPending(t *testing.T, w *piRPCWorker, id string) {
 		time.Sleep(time.Millisecond)
 	}
 	t.Fatalf("pending request %q never registered", id)
+}
+
+func TestBangCommand(t *testing.T) {
+	tests := []struct {
+		name    string
+		req     chat.Request
+		wantCmd string
+		wantExc bool
+		wantOK  bool
+	}{
+		{"plain prompt", chat.Request{Message: "hello"}, "", false, false},
+		{"bang", chat.Request{Message: "!src-status"}, "src-status", false, true},
+		{"bang with args", chat.Request{Message: "! git log --oneline -3"}, "git log --oneline -3", false, true},
+		{"double bang excluded", chat.Request{Message: "!!ls -la"}, "ls -la", true, true},
+		{"bare bang", chat.Request{Message: "!"}, "", false, false},
+		{"bang with image is a prompt", chat.Request{Message: "!ls", Images: []chat.Image{{}}}, "", false, false},
+		{"bang with file is a prompt", chat.Request{Message: "!ls", Files: []chat.UploadedFile{{}}}, "", false, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd, exc, ok := bangCommand(tt.req)
+			if cmd != tt.wantCmd || exc != tt.wantExc || ok != tt.wantOK {
+				t.Fatalf("bangCommand() = (%q, %v, %v), want (%q, %v, %v)", cmd, exc, ok, tt.wantCmd, tt.wantExc, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestPromptSendsBashCommandForBangInput(t *testing.T) {
+	var buf bytes.Buffer
+	w := &piRPCWorker{
+		stdin:   nopWriteCloser{&buf},
+		status:  workers.WorkerStatus{State: workers.WorkerStateIdle},
+		pending: make(map[string]chan response),
+	}
+	done := make(chan error, 1)
+	go func() { done <- w.Prompt(context.Background(), chat.Request{Message: "!!src-status"}) }()
+	waitForPending(t, w, "req-1")
+	w.handleRPCLine(`{"type":"response","id":"req-1","success":true}`)
+	if err := <-done; err != nil {
+		t.Fatalf("Prompt error: %v", err)
+	}
+	var sent map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &sent); err != nil {
+		t.Fatalf("unmarshal sent command: %v", err)
+	}
+	if sent["type"] != "bash" || sent["command"] != "src-status" || sent["excludeFromContext"] != true {
+		t.Fatalf("sent = %#v", sent)
+	}
+	if got := w.Status(); got.State != workers.WorkerStateIdle {
+		t.Fatalf("status after bash = %q, want idle (no agent turn)", got.State)
+	}
 }
 
 func TestStatusReportsRunningDuringRecentStreamActivity(t *testing.T) {

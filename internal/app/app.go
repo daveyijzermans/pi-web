@@ -33,6 +33,13 @@ const developmentEnvVar = "PI_WEB_DEV"
 // Main runs the pi-web application. version is supplied by cmd/pi-web so
 // release builds can set it with -ldflags "-X main.version=...".
 func Main(version string) {
+	if len(os.Args) >= 3 && os.Args[1] == rpc.HolderArg {
+		if err := rpc.RunHolder(os.Args[2]); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	port := flag.String("p", defaultPort, "port to listen on")
 	hostOverride := flag.String("host", "", "host/IP to bind; defaults to 127.0.0.1")
 	open := flag.Bool("o", false, "auto-open browser")
@@ -77,8 +84,9 @@ func Main(version string) {
 	versionChecker := updater.New(version)
 
 	var srv *server.Server
+	workerSocketDir := filepath.Join(agentDir, "pi-web", "workers")
 	manager := workers.NewManager(func(sessionID, sessionPath string) (workers.ChatWorker, error) {
-		return rpc.NewPiWorkerWithStream(sessionPath, func(preview rpc.StreamPreview) {
+		return rpc.NewSocketWorkerWithStream(sessionID, sessionPath, workerSocketDir, func(preview rpc.StreamPreview) {
 			if srv != nil {
 				srv.BroadcastChatPreview(sessionID, preview)
 			}
