@@ -103,3 +103,74 @@ func TestPrepareSessionPageData_LeafIDStillTailWhenTruncated(t *testing.T) {
 		t.Errorf("leafId = %q, want it to contain %q (last entry of full session)", leafID, want)
 	}
 }
+
+func TestTailWindow_SmallSessionNotTruncated(t *testing.T) {
+	entries := make([]map[string]any, 10)
+	for i := range entries {
+		entries[i] = map[string]any{"type": "message", "id": fmt.Sprintf("id%03d", i)}
+	}
+	from, truncated := TailWindow(entries)
+	if truncated || from != 0 {
+		t.Fatalf("small session truncated: from=%d truncated=%v", from, truncated)
+	}
+}
+
+func TestTailWindow_EntryCountStillTruncates(t *testing.T) {
+	n := LargeSessionThreshold + 200
+	entries := make([]map[string]any, n)
+	for i := range entries {
+		entries[i] = map[string]any{"type": "message", "id": fmt.Sprintf("id%06d", i)}
+	}
+	from, truncated := TailWindow(entries)
+	if !truncated || from != n-LargeSessionTailEntries {
+		t.Fatalf("entry-count truncation: from=%d want %d", from, n-LargeSessionTailEntries)
+	}
+}
+
+// The 4bd24bd3 case: few entries, but huge — the byte budget must truncate even
+// though the entry count is well under LargeSessionThreshold.
+func TestTailWindow_ByteBudgetTruncatesFewButHuge(t *testing.T) {
+	origMax, origMin := LargeSessionMaxBytes, LargeSessionMinTailEntries
+	LargeSessionMaxBytes = 1_000_000
+	LargeSessionMinTailEntries = 2
+	defer func() { LargeSessionMaxBytes, LargeSessionMinTailEntries = origMax, origMin }()
+
+	big := strings.Repeat("x", 300_000)   // ~300KB per entry
+	entries := make([]map[string]any, 10) // 10 << LargeSessionThreshold
+	for i := range entries {
+		entries[i] = map[string]any{
+			"type":    "message",
+			"id":      fmt.Sprintf("id%03d", i),
+			"message": map[string]any{"role": "user", "content": big},
+		}
+	}
+	from, truncated := TailWindow(entries)
+	if !truncated || from == 0 {
+		t.Fatalf("expected byte-budget truncation: from=%d truncated=%v", from, truncated)
+	}
+	kept := len(entries) - from
+	if kept < LargeSessionMinTailEntries {
+		t.Fatalf("kept %d entries, below min tail %d", kept, LargeSessionMinTailEntries)
+	}
+	if kept > 5 {
+		t.Fatalf("kept %d entries (~%dKB), expected budget-bounded (~1MB)", kept, kept*300)
+	}
+}
+
+func TestTailWindow_ByteBudgetKeepsMinTailForGiantLastEntry(t *testing.T) {
+	origMax, origMin := LargeSessionMaxBytes, LargeSessionMinTailEntries
+	LargeSessionMaxBytes = 100_000
+	LargeSessionMinTailEntries = 3
+	defer func() { LargeSessionMaxBytes, LargeSessionMinTailEntries = origMax, origMin }()
+
+	big := strings.Repeat("y", 500_000) // one entry alone blows the budget
+	entries := make([]map[string]any, 6)
+	for i := range entries {
+		entries[i] = map[string]any{"type": "message", "id": fmt.Sprintf("id%03d", i),
+			"message": map[string]any{"role": "user", "content": big}}
+	}
+	from, _ := TailWindow(entries)
+	if kept := len(entries) - from; kept < LargeSessionMinTailEntries {
+		t.Fatalf("kept %d entries, must not drop below min tail %d even for giant entries", kept, LargeSessionMinTailEntries)
+	}
+}

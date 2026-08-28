@@ -279,11 +279,8 @@ func (s *Server) handleApiSession(w http.ResponseWriter, r *http.Request) {
 func paginatedEntries(entries []map[string]any) (out []map[string]any, total, from int) {
 	total = len(entries)
 	out = entries
-	if total > ui.LargeSessionThreshold {
-		from = total - ui.LargeSessionTailEntries
-		if from < 0 {
-			from = 0
-		}
+	from, truncated := ui.TailWindow(entries)
+	if truncated {
 		out = entries[from:]
 	}
 	return out, total, from

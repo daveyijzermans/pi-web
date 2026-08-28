@@ -42,7 +42,57 @@ var livePaletteCss string
 var (
 	LargeSessionThreshold   = envInt("PI_WEB_LARGE_SESSION_THRESHOLD", 1500)
 	LargeSessionTailEntries = envInt("PI_WEB_LARGE_SESSION_TAIL_ENTRIES", 1000)
+	// LargeSessionMaxBytes caps the serialized size of the embedded tail. Entry
+	// count alone misses sessions that are few-but-huge — e.g. a transcript
+	// with a handful of multi-MB file reads. Above this budget the tail is cut
+	// by bytes too, so the initial payload (and the browser's parse/render) stay
+	// bounded no matter how large individual entries are.
+	LargeSessionMaxBytes = envInt("PI_WEB_LARGE_SESSION_MAX_BYTES", 4_000_000)
+	// LargeSessionMinTailEntries is the floor the byte cap will not cut below,
+	// so a giant last entry still leaves a usable window on screen.
+	LargeSessionMinTailEntries = envInt("PI_WEB_LARGE_SESSION_MIN_TAIL_ENTRIES", 5)
 )
+
+// TailWindow decides which trailing slice of entries to embed on the initial
+// load. It truncates when the session exceeds either the entry-count threshold
+// or the byte budget, returning the start index and whether truncation
+// happened. The byte walk runs newest-first and stops as soon as the budget is
+// hit, so it marshals only ~one budget's worth even for a 30MB+ session.
+func TailWindow(entries []map[string]any) (from int, truncated bool) {
+	total := len(entries)
+	if total == 0 {
+		return 0, false
+	}
+	if total > LargeSessionThreshold {
+		from = total - LargeSessionTailEntries
+		if from < 0 {
+			from = 0
+		}
+	}
+	if LargeSessionMaxBytes > 0 {
+		acc := 0
+		byteFrom := 0
+		for i := total - 1; i >= 0; i-- {
+			b, _ := json.Marshal(entries[i])
+			// Always keep at least LargeSessionMinTailEntries, budget or not, so a
+			// giant last entry still leaves a usable window.
+			mustKeep := (total - i) <= LargeSessionMinTailEntries
+			if !mustKeep && acc+len(b) > LargeSessionMaxBytes {
+				byteFrom = i + 1 // adding this entry tips over budget: start after it
+				break
+			}
+			acc += len(b)
+			byteFrom = i
+		}
+		if byteFrom > from {
+			from = byteFrom
+		}
+	}
+	if from < 0 {
+		from = 0
+	}
+	return from, from > 0
+}
 
 func envInt(name string, def int) int {
 	if v := os.Getenv(name); v != "" {
@@ -74,12 +124,9 @@ func prepareSessionPageData(session sessions.Session, cssTemplate string) (dataB
 
 	total := len(session.Entries)
 	entries := session.Entries
-	from := 0
-	truncated := false
-	if total > LargeSessionThreshold {
-		from = total - LargeSessionTailEntries
+	from, truncated := TailWindow(session.Entries)
+	if truncated {
 		entries = session.Entries[from:]
-		truncated = true
 	}
 
 	sessionData := map[string]any{
