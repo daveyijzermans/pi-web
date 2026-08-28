@@ -3375,6 +3375,30 @@
       display: none;
     }
 
+    /* Huge outputs (multi-MB reads): preview + an explicit expand button that
+       renders the full text as one plain <pre> only on demand. */
+    .output-huge-toggle {
+      margin-top: 6px;
+      padding: 3px 10px;
+      font: inherit;
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--surface, rgba(127, 127, 127, 0.08));
+      border: 1px solid var(--border, rgba(127, 127, 127, 0.25));
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .output-huge-toggle:hover {
+      text-decoration: underline;
+    }
+    .output-huge-full {
+      margin-top: 6px;
+      max-height: 60vh;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
     .ask-question-card {
       display: grid;
       gap: 10px;

@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/svelte';
+import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import ToolOutput from './ToolOutput.svelte';
 import { applyToggleStateToNode } from '../../session/ui/toggle-state.js';
 
@@ -23,11 +23,26 @@ describe('ToolOutput', () => {
     expect(container.querySelector('.output-preview')).not.toBeNull();
     expect(container.querySelector('.output-full')).not.toBeNull();
     // Preview shows the first 12 lines; full shows all 40.
-    expect(container.querySelectorAll('.output-preview > div:not(.output-expand-hint)').length).toBe(
-      12,
-    );
+    expect(
+      container.querySelectorAll('.output-preview > div:not(.output-expand-hint)').length,
+    ).toBe(12);
     expect(container.querySelectorAll('.output-full > div').length).toBe(40);
     expect(container.querySelector('.output-expand-hint').textContent).toBe('Show 28 more lines');
+  });
+
+  it('renders a huge output as a bounded preview with the full text deferred', async () => {
+    const huge = lines(20000); // >100KB — triggers the huge branch
+    const { container, getByRole } = render(ToolOutput, { props: { text: huge } });
+    expect(container.querySelector('.tool-output-huge')).not.toBeNull();
+    // The full multi-line block must NOT be in the DOM until asked for.
+    expect(container.querySelector('.output-huge-full')).toBeNull();
+    // Preview shows only the first 12 lines.
+    expect(container.querySelectorAll('.output-preview > div').length).toBe(12);
+    // Expanding renders the full text as a single plain <pre>.
+    await fireEvent.click(getByRole('button', { name: /Show full output/ }));
+    const full = container.querySelector('.output-huge-full');
+    expect(full).not.toBeNull();
+    expect(full.textContent).toBe(huge);
   });
 
   it('is expanded by the tool-outputs toggle default (applyToggleStateToNode)', () => {

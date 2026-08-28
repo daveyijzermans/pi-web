@@ -253,6 +253,8 @@ export default {
   'session.earlierMessages': 'Earlier messages',
   'session.showingLatestMessages': 'Showing latest {shown} of {total} messages.',
   'session.toolOutputMore': 'Show {n} more lines',
+  'session.toolOutputShowFull': 'Show full output ({size})',
+  'session.toolOutputHide': 'Hide output',
   'session.loadEarlierCount': 'Load {count} earlier',
   'session.loadingEarlier': 'Loading…',
   'session.loadEarlierFailed': 'Failed to load: {error}',
