@@ -42,6 +42,12 @@ func (s *Server) computeRunningStatus(sessionID string) bool {
 			return false
 		}
 	}
+	// A turn force-stopped via cancel (its holder was killed) has a frozen
+	// mid-turn tail. Report idle immediately instead of trusting that stale
+	// tail for the full terminalTurnStaleWindow.
+	if s.wasStoppedAfterLastWrite(sessionID) {
+		return false
+	}
 	// A turn orphaned by a previous instance's restart has no live writer: its
 	// mid-turn tail is stale, not running. Report idle so it neither shows a
 	// phantom "working" indicator nor fires a false done notification.

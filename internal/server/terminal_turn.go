@@ -2,10 +2,58 @@ package server
 
 import (
 	"os"
+	"path/filepath"
 	"time"
 
 	"pi-web/internal/sessions"
 )
+
+// workerSocketDir is where detached worker-holders listen (one socket per
+// session). Mirrors the path the app wires into the worker factory.
+func (s *Server) workerSocketDir() string {
+	return filepath.Join(s.agentDir, "pi-web", "workers")
+}
+
+// markTurnStopped records that a session's turn was force-stopped (holder
+// killed) via cancel. computeRunningStatus then reports idle until the jsonl
+// is written again, so a killed turn's stale mid-turn tail can't keep the
+// indicator lit for the full terminalTurnStaleWindow.
+func (s *Server) markTurnStopped(sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	now := s.now
+	if now == nil {
+		now = time.Now
+	}
+	s.stoppedMu.Lock()
+	if s.stoppedAt == nil {
+		s.stoppedAt = make(map[string]time.Time)
+	}
+	s.stoppedAt[sessionID] = now()
+	s.stoppedMu.Unlock()
+}
+
+// wasStoppedAfterLastWrite reports whether the session was force-stopped and
+// its jsonl has not been written since. A later write (a genuinely new turn)
+// makes the mtime newer than the stop mark and clears the override.
+func (s *Server) wasStoppedAfterLastWrite(sessionID string) bool {
+	s.stoppedMu.Lock()
+	ts, ok := s.stoppedAt[sessionID]
+	s.stoppedMu.Unlock()
+	if !ok {
+		return false
+	}
+	path := s.sessionPath(sessionID)
+	if path == "" {
+		return true
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return true
+	}
+	return !info.ModTime().After(ts)
+}
 
 // terminalTurnStaleWindow caps how long a mid-turn tail state is trusted as
 // "running" without a fresh write. It keeps the indicator lit through long

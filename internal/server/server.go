@@ -64,19 +64,25 @@ type Deps struct {
 // Server holds runtime state — connected SSE clients and last-seen modtimes
 // per session file. Construct via New; register HTTP routes via Register.
 type Server struct {
-	agentDir              string
-	sessionsDir           string
-	clients               []*sseClient
-	clientsMu             sync.RWMutex
-	fileMod               map[string]time.Time
-	fileActivity          map[string]time.Time
-	filePath              map[string]string // session id -> absolute jsonl path (for tail reads)
-	fileModMu             sync.RWMutex
-	compacting            map[string]struct{} // sessions with an in-flight manual compaction
-	compactingMu          sync.Mutex
-	orphanedWebTurns      map[string]struct{} // sessions left mid-web-turn by a previous instance (worker died on restart)
-	orphanLoadedAt        time.Time           // when the orphaned set was seeded at startup
-	orphanedMu            sync.Mutex
+	agentDir         string
+	sessionsDir      string
+	clients          []*sseClient
+	clientsMu        sync.RWMutex
+	fileMod          map[string]time.Time
+	fileActivity     map[string]time.Time
+	filePath         map[string]string // session id -> absolute jsonl path (for tail reads)
+	fileModMu        sync.RWMutex
+	compacting       map[string]struct{} // sessions with an in-flight manual compaction
+	compactingMu     sync.Mutex
+	orphanedWebTurns map[string]struct{} // sessions left mid-web-turn by a previous instance (worker died on restart)
+	orphanLoadedAt   time.Time           // when the orphaned set was seeded at startup
+	orphanedMu       sync.Mutex
+	stoppedAt        map[string]time.Time // sessions force-stopped via cancel; report idle until a newer write
+	stoppedMu        sync.Mutex
+	// stopOrphanedHolder kills a live worker-holder whose in-server worker was
+	// lost (orphaned by a restart) so the Stop button can always end a running
+	// turn. Injectable for tests; defaults to rpc.StopHolder.
+	stopOrphanedHolder    func(sessionID string) (bool, error)
 	chatSender            ChatSender
 	cache                 *sessions.Cache
 	auth                  *auth.Middleware
@@ -165,6 +171,7 @@ func New(deps Deps) (*Server, error) {
 		filePath:              make(map[string]string),
 		compacting:            make(map[string]struct{}),
 		orphanedWebTurns:      make(map[string]struct{}),
+		stoppedAt:             make(map[string]time.Time),
 		chatSender:            deps.ChatSender,
 		cache:                 deps.Cache,
 		auth:                  deps.Auth,
@@ -196,6 +203,9 @@ func New(deps Deps) (*Server, error) {
 	}
 	s.schedules.Now = now
 	s.chatQueue.Now = now
+	s.stopOrphanedHolder = func(sessionID string) (bool, error) {
+		return rpc.StopHolder(s.workerSocketDir(), sessionID)
+	}
 	if pm, err := NewPushManager(agentDir); err != nil {
 		fmt.Fprintf(os.Stderr, "push notifications unavailable: %v\n", err)
 	} else {

@@ -51,6 +51,9 @@ type fakeSender struct {
 	setThinkingSessionID    string
 	setThinkingLevel        string
 	getCommandsCalls        int
+	hasWorker               bool
+	abortCalls              int
+	abortSessionID          string
 }
 
 func (f *fakeSender) Send(ctx context.Context, sessionID, sessionPath string, chat chat.Request) error {
@@ -83,6 +86,10 @@ func (f *fakeSender) SetThinkingLevel(ctx context.Context, sessionID, sessionPat
 }
 
 func (f *fakeSender) Abort(ctx context.Context, sessionID string) error {
+	f.mu.Lock()
+	f.abortCalls++
+	f.abortSessionID = sessionID
+	f.mu.Unlock()
 	return nil
 }
 
@@ -120,7 +127,7 @@ func (f *fakeSender) Compact(ctx context.Context, sessionID, sessionPath string)
 	return f.compactErr
 }
 
-func (f *fakeSender) HasWorker(sessionID string) bool { return false }
+func (f *fakeSender) HasWorker(sessionID string) bool { return f.hasWorker }
 
 func (f *fakeSender) EnsureWorker(ctx context.Context, sessionID, sessionPath string) error {
 	f.mu.Lock()
@@ -848,5 +855,98 @@ func waitForCondition(t *testing.T, timeout time.Duration, fn func() bool) {
 	}
 	if !fn() {
 		t.Fatal("condition not met before timeout")
+	}
+}
+
+// A cancel on an attached web worker takes the graceful Abort path and must
+// NOT touch the orphaned-holder killer.
+func TestHandleCancelAbortsAttachedWorker(t *testing.T) {
+	root := t.TempDir()
+	writeSessionFile(t, root, "--tmp--project--", "session.jsonl")
+	fake := &fakeSender{hasWorker: true}
+	holderKilled := 0
+	s := &Server{
+		sessionsDir: root, chatSender: fake,
+		clients: make([]*sseClient, 0), lastKnown: make(map[string]struct{}),
+		stoppedAt: make(map[string]time.Time), now: time.Now,
+		stopOrphanedHolder: func(string) (bool, error) { holderKilled++; return false, nil },
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/chat/cancel?id=session.jsonl", nil)
+	w := httptest.NewRecorder()
+	s.handleCancelChat(w, req)
+
+	if w.Code != 0 && w.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", w.Code, w.Body.String())
+	}
+	fake.mu.Lock()
+	abortCalls, abortID := fake.abortCalls, fake.abortSessionID
+	fake.mu.Unlock()
+	if abortCalls != 1 || abortID != "session.jsonl" {
+		t.Fatalf("Abort calls = %d id = %q, want 1 / session.jsonl", abortCalls, abortID)
+	}
+	if holderKilled != 0 {
+		t.Fatalf("orphaned-holder killer called %d times for an attached worker, want 0", holderKilled)
+	}
+}
+
+// A cancel on a session with NO attached worker (orphaned by a restart) must
+// reach the live holder and kill it — the bug where the Stop button was a
+// silent no-op for orphaned turns. It must also flip status to idle at once.
+func TestHandleCancelKillsOrphanedHolderAndReportsIdle(t *testing.T) {
+	root := t.TempDir()
+	writeSessionFile(t, root, "--tmp--project--", "session.jsonl")
+	fake := &fakeSender{hasWorker: false}
+	killedID := ""
+	s := &Server{
+		sessionsDir: root, chatSender: fake,
+		clients: make([]*sseClient, 0), lastKnown: make(map[string]struct{}),
+		stoppedAt: make(map[string]time.Time), orphanedWebTurns: make(map[string]struct{}),
+		now:                time.Now,
+		stopOrphanedHolder: func(id string) (bool, error) { killedID = id; return true, nil },
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/chat/cancel?id=session.jsonl", nil)
+	w := httptest.NewRecorder()
+	s.handleCancelChat(w, req)
+
+	if killedID != "session.jsonl" {
+		t.Fatalf("orphaned holder killed for %q, want session.jsonl", killedID)
+	}
+	fake.mu.Lock()
+	abortCalls := fake.abortCalls
+	fake.mu.Unlock()
+	if abortCalls != 0 {
+		t.Fatalf("Abort called %d times with no attached worker, want 0", abortCalls)
+	}
+	// Force-stopped: status must read idle even though the jsonl tail is fresh.
+	if s.wasStoppedAfterLastWrite("session.jsonl") != true {
+		t.Fatal("session not marked stopped after killing its holder")
+	}
+	if s.computeRunningStatus("session.jsonl") {
+		t.Fatal("computeRunningStatus = running after force-stop, want idle")
+	}
+}
+
+// When there is neither an attached worker nor a live holder (e.g. a genuine
+// terminal pi session), cancel is a safe no-op: nothing of ours to kill, and
+// the session is NOT marked stopped (we must not mask a real terminal turn).
+func TestHandleCancelNoWorkerNoHolderIsSafeNoop(t *testing.T) {
+	root := t.TempDir()
+	writeSessionFile(t, root, "--tmp--project--", "session.jsonl")
+	fake := &fakeSender{hasWorker: false}
+	s := &Server{
+		sessionsDir: root, chatSender: fake,
+		clients: make([]*sseClient, 0), lastKnown: make(map[string]struct{}),
+		stoppedAt: make(map[string]time.Time), now: time.Now,
+		stopOrphanedHolder: func(string) (bool, error) { return false, nil },
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/chat/cancel?id=session.jsonl", nil)
+	w := httptest.NewRecorder()
+	s.handleCancelChat(w, req)
+
+	if s.wasStoppedAfterLastWrite("session.jsonl") {
+		t.Fatal("session marked stopped when no holder existed — would mask a real terminal turn")
 	}
 }

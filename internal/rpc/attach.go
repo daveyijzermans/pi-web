@@ -26,6 +26,31 @@ func SocketPathFor(socketDir, sessionID string) string {
 	return filepath.Join(socketDir, hex.EncodeToString(sum[:8])+".sock")
 }
 
+// StopHolder reaches a session's live worker-holder directly and tells it to
+// shut down (which SIGKILLs its pi). This is the Stop path for a turn whose
+// in-server worker was lost — e.g. a pi-web restart mid-turn leaves the holder
+// + pi running detached, invisible to the manager's Abort. Returns (true,nil)
+// when a live holder was found and told to die; (false,nil) when no holder is
+// listening (nothing to stop); a non-nil error only on an unexpected I/O
+// failure after connecting.
+//
+// It drains the holder's handshake/replay bytes so the holder's write side
+// can't block its reader goroutine from seeing the shutdown control message;
+// the drain returns when the holder exits (EOF), bounded by a deadline.
+func StopHolder(socketDir, sessionID string) (bool, error) {
+	conn, err := dialHolder(SocketPathFor(socketDir, sessionID))
+	if err != nil {
+		return false, nil // no live holder for this session
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if _, err := conn.Write([]byte(`{"type":"` + holderShutdownType + `"}` + "\n")); err != nil {
+		return false, fmt.Errorf("stop holder %s: %w", sessionID, err)
+	}
+	_, _ = io.Copy(io.Discard, conn)
+	return true, nil
+}
+
 // NewSocketWorkerWithStream returns a ChatWorker whose pi process lives in a
 // detached worker-holder (see RunHolder) instead of as a child of this
 // process. If the session's holder is already running — e.g. after a pi-web

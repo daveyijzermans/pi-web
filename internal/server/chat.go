@@ -215,13 +215,33 @@ func (s *Server) handleCancelChat(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusServiceUnavailable, "chat unavailable")
 		return
 	}
-	if err := s.chatSender.Abort(r.Context(), resolved.Session.ID); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
-		return
+	sessionID := resolved.Session.ID
+	if s.chatSender.HasWorker(sessionID) {
+		// Normal path: an attached web worker — graceful abort (which kills the
+		// worker if it is wedged and unresponsive; see rpc worker Abort).
+		if err := s.chatSender.Abort(r.Context(), sessionID); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	} else if s.stopOrphanedHolder != nil {
+		// No attached worker: a turn orphaned by a pi-web restart keeps running
+		// in a detached holder that Abort can't see. Reach the live holder and
+		// kill it so the Stop button always ends a running turn. A false return
+		// (no live holder) means there is nothing of ours to stop — e.g. a
+		// genuine terminal pi session, which we must not touch.
+		stopped, err := s.stopOrphanedHolder(sessionID)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if stopped {
+			s.markTurnStopped(sessionID)
+			s.clearWebTurn(sessionID)
+		}
 	}
-	_ = os.Remove(filepath.Join(s.sessionStatusDir(), resolved.Session.ID))
-	s.recomputeAndBroadcastStatus(resolved.Session.ID)
-	s.broadcast(resolved.Session.ID, "reload")
+	_ = os.Remove(filepath.Join(s.sessionStatusDir(), sessionID))
+	s.recomputeAndBroadcastStatus(sessionID)
+	s.broadcast(sessionID, "reload")
 	writeJSON(w, 0, map[string]any{"ok": true, "status": "cancelled"})
 }
 
