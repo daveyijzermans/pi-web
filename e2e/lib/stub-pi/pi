@@ -82,6 +82,117 @@ function parseDelay(raw) {
   return { text: (raw.slice(0, m.index) + raw.slice(m.index + m[0].length)).trim(), delay: Number(m[1]) };
 }
 
+// A "[[tooly:GAP]]" marker scripts a realistic multi-message tool turn,
+// mirroring real pi's event + flush order (verified against a live
+// `pi --mode rpc` trace):
+//   message 1: text streams, text_end, tool-call args stream silently,
+//              flush [text, toolCall] at message_end; toolResult after GAP ms.
+//   message 2: text streams, text_end, then a LONG silent args phase
+//              (ARGS_MS) before its [text, toolCall] entry flushes — the
+//              window where streamed text exists only in the preview.
+//   message 3: short text, flushed, then agent_end.
+// The streaming-preview spec asserts streamed content never disappears from
+// the page mid-turn, including under slow /api/session fetches.
+function parseTooly(raw) {
+  const m = /\s*\[\[tooly:(\d+)\]\]\s*/.exec(raw);
+  if (!m) return null;
+  return { text: (raw.slice(0, m.index) + raw.slice(m.index + m[0].length)).trim(), gap: Number(m[1]) };
+}
+
+const TOOLY_TEXT_1 = "Alpha beta gamma.";
+const TOOLY_TEXT_2 = "Delta epsilon zeta.";
+const TOOLY_TEXT_3 = "Omega finale.";
+const TOOLY_ARGS_MS = 3000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function textDelta(delta) {
+  send({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta } });
+}
+
+async function streamText(text) {
+  const words = text.split(/(?<= )/);
+  for (const word of words) {
+    textDelta(word);
+    await sleep(60);
+  }
+  send({ type: "message_update", assistantMessageEvent: { type: "text_end", content: text } });
+}
+
+function toolCallEntry(parentId, text, callId) {
+  const id = nextId();
+  appendEntry({
+    type: "message",
+    id,
+    parentId,
+    timestamp: new Date().toISOString(),
+    message: {
+      role: "assistant",
+      content: [
+        { type: "text", text },
+        { type: "toolCall", id: callId, name: "bash", arguments: { command: "true" } },
+      ],
+      timestamp: Date.now(),
+    },
+  });
+  return id;
+}
+
+function toolResultEntry(parentId, callId) {
+  const id = nextId();
+  appendEntry({
+    type: "message",
+    id,
+    parentId,
+    timestamp: new Date().toISOString(),
+    message: {
+      role: "toolResult",
+      toolCallId: callId,
+      toolName: "bash",
+      content: [{ type: "text", text: "ok" }],
+      isError: false,
+      timestamp: Date.now(),
+    },
+  });
+  return id;
+}
+
+async function runToolyTurn(userText, gap) {
+  const user = messageEntry("user", userText, lastEntryId());
+  appendEntry(user.entry);
+
+  // Message 1: streamed text, short args phase, flush [text, toolCall].
+  await streamText(TOOLY_TEXT_1);
+  await sleep(200); // args stream (silent — no preview events)
+  const call1 = `stub-call-${idSeq++}`;
+  const a1 = toolCallEntry(user.id, TOOLY_TEXT_1, call1);
+  send({ type: "message_end" });
+
+  // The "tool" runs: silent for GAP ms, then its result lands.
+  await sleep(gap);
+  const tr1 = toolResultEntry(a1, call1);
+
+  // Message 2: streamed text, then a LONG silent args phase before the
+  // entry flushes — during this window the text exists only in the preview.
+  await sleep(400);
+  await streamText(TOOLY_TEXT_2);
+  await sleep(TOOLY_ARGS_MS);
+  const call2 = `stub-call-${idSeq++}`;
+  const a2 = toolCallEntry(tr1, TOOLY_TEXT_2, call2);
+  send({ type: "message_end" });
+  const tr2 = toolResultEntry(a2, call2);
+
+  // Message 3: quick closing text, then the turn ends.
+  await sleep(300);
+  await streamText(TOOLY_TEXT_3);
+  appendEntry(messageEntry("assistant", TOOLY_TEXT_3, tr2).entry);
+  send({ type: "message_end" });
+  send({ type: "turn_end" });
+  send({ type: "agent_end" });
+}
+
 function writeTurn(userText, reply) {
   if (!sessionPath) return;
   const user = messageEntry("user", userText, lastEntryId());
@@ -94,6 +205,11 @@ function handlePrompt(cmd) {
   respond(cmd.id, "prompt", {});
 
   const raw = typeof cmd.message === "string" ? cmd.message : JSON.stringify(cmd.message ?? "");
+  const tooly = parseTooly(raw);
+  if (tooly) {
+    void runToolyTurn(tooly.text, tooly.gap);
+    return;
+  }
   const { text: userText, delay } = parseDelay(raw);
   const reply = `Stub reply: ${userText}`;
 

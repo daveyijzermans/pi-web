@@ -1,4 +1,3 @@
-
 export function getSpinnerConfig(windowImpl = typeof window !== 'undefined' ? window : null) {
   let style = 'runcat';
   try {
@@ -38,6 +37,7 @@ export function clearChatPreviewState(state, { keepAssistant = false } = {}) {
       state.chatPreviewEl.parentNode.removeChild(state.chatPreviewEl);
     }
     state.chatPreviewEl = null;
+    state.previewText = '';
   }
 }
 
@@ -251,6 +251,7 @@ export function renderPendingChatState(
   container.appendChild(state.pendingUserEl);
 
   state.chatPreviewEl = createAssistantPreview(documentImpl, { waiting: true, windowImpl });
+  state.previewText = '';
   container.appendChild(state.chatPreviewEl);
 
   if (shouldFollow()) {
@@ -258,6 +259,63 @@ export function renderPendingChatState(
     scrollAfterLayout(false, state.chatPreviewEl);
   }
   return true;
+}
+
+// A finished (done) preview whose canonical entry hasn't rendered yet is the
+// ONLY place its text exists — pi flushes a message to disk only after its
+// tool-call args finish, and the reload fetch can lag seconds behind on a
+// slow link. When the next message starts streaming, don't overwrite that
+// element: archive it in place and stream into a fresh one. Archived chunks
+// are removed by reconcilePreviewsWithCanonical when their canonical entry
+// arrives.
+function archiveDonePreview(state) {
+  const el = state.chatPreviewEl;
+  if (!el || !el.classList.contains('done')) return;
+  el.removeAttribute('id');
+  if (!state.settledPreviews) state.settledPreviews = [];
+  state.settledPreviews.push({ el, text: String(state.previewText || '') });
+  state.chatPreviewEl = null;
+  state.previewText = '';
+}
+
+// Remove archived preview chunks (and a finished live preview) whose text has
+// arrived as canonical assistant entries. Called from the session reload with
+// the NEW assistant entries of that reload. A live preview without text
+// (waiting / thinking-only) follows the legacy rule: any new assistant entry
+// clears it once it is done (or the worker is no longer running).
+export function reconcilePreviewsWithCanonical(state, entries, { running = () => false } = {}) {
+  const texts = [];
+  for (const entry of entries || []) {
+    const content = entry?.message?.content;
+    if (typeof content === 'string') {
+      texts.push(content);
+    } else if (Array.isArray(content)) {
+      for (const block of content) {
+        if (block?.type === 'text' && block.text) texts.push(String(block.text));
+      }
+    }
+  }
+  if (!texts.length) return;
+  const canonical = (text) => !!text && texts.some((t) => t.includes(text));
+
+  state.settledPreviews = (state.settledPreviews || []).filter(({ el, text }) => {
+    if (canonical(String(text || '').trim())) {
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      return false;
+    }
+    return true;
+  });
+
+  const el = state.chatPreviewEl;
+  if (!el) return;
+  const done = el.classList.contains('done');
+  const shown = String(state.previewText || '').trim();
+  const clearable = shown ? canonical(shown) : done || !running();
+  if (clearable) {
+    if (el.parentNode) el.parentNode.removeChild(el);
+    state.chatPreviewEl = null;
+    state.previewText = '';
+  }
 }
 
 export function renderChatPreviewState(
@@ -281,6 +339,9 @@ export function renderChatPreviewState(
     documentImpl.getElementById('messages') ||
     documentImpl.getElementById('content') ||
     documentImpl.body;
+  // A done preview belongs to a finished message; this payload starts the
+  // next one. Preserve the finished text until its canonical entry lands.
+  archiveDonePreview(state);
   if (!state.chatPreviewEl) {
     state.chatPreviewEl = createAssistantPreview(documentImpl, { windowImpl });
     container.appendChild(state.chatPreviewEl);
@@ -297,9 +358,7 @@ export function renderChatPreviewState(
 
   state.chatPreviewEl.classList.remove('chat-preview-waiting');
   const thinkingBlock = state.chatPreviewEl.querySelector('.chat-preview-thinking');
-  const thinkingTextEl = state.chatPreviewEl.querySelector(
-    '.chat-preview-thinking .thinking-text',
-  );
+  const thinkingTextEl = state.chatPreviewEl.querySelector('.chat-preview-thinking .thinking-text');
   if (thinkingText.trim()) {
     if (thinkingTextEl) thinkingTextEl.textContent = thinkingText;
     if (thinkingBlock) thinkingBlock.style.display = '';
@@ -309,6 +368,10 @@ export function renderChatPreviewState(
   }
   const content = state.chatPreviewEl.querySelector('.message-content');
   setMarkdownContent(content, renderMarkdown(payload.content));
+  // Raw source of what the preview shows — handleSessionReload compares it
+  // against incoming canonical entries to decide whether the preview may be
+  // cleared (only the previewed message's own entry may clear it).
+  state.previewText = payload.content;
   if (payload.done) finishChatPreviewState(state);
   else state.chatPreviewEl.classList.remove('done');
   if (shouldFollow()) {

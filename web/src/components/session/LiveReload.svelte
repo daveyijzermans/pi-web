@@ -17,6 +17,7 @@
   import {
     clearChatPreviewState,
     finishChatPreviewState,
+    reconcilePreviewsWithCanonical,
     renderChatPreviewState,
     renderPendingChatState,
     startRunningSpinner,
@@ -119,7 +120,13 @@
     const sessId = getSessionIdFromLocation({ locationImpl: windowImpl.location });
 
     // ── Streaming chat preview ─────────────────────────────────────────────────
-    const CHAT_PREVIEW_STATE = { chatPreviewEl: null, pendingUserEl: null, runningSpinnerEl: null };
+    const CHAT_PREVIEW_STATE = {
+      chatPreviewEl: null,
+      pendingUserEl: null,
+      runningSpinnerEl: null,
+      previewText: '',
+      settledPreviews: [],
+    };
 
     function clearChatPreview() {
       const hasDoneClass =
@@ -163,6 +170,14 @@
         entryState: LIVE_ENTRY_STATE,
         clearChatPreview,
         clearPendingUser,
+        previewText: () => CHAT_PREVIEW_STATE.previewText || '',
+        // Per-message preview teardown: each preview chunk (archived finished
+        // messages + the live one) is removed only when THIS reload delivered
+        // its canonical entry — never because some older entry landed late.
+        onNewAssistantEntries: (newEntries) =>
+          reconcilePreviewsWithCanonical(CHAT_PREVIEW_STATE, newEntries, {
+            running: () => chatRunning,
+          }),
         // Reactive mode: the Svelte model owns #messages, so no DOM patchers.
         updateStats,
         updateTitle,
@@ -197,7 +212,10 @@
       const RETRY_DELAY = 700;
       const tryReload = () => {
         triggerReload().finally(() => {
-          if (CHAT_PREVIEW_STATE.chatPreviewEl == null || ++attempt >= MAX_ATTEMPTS) {
+          const previewsRemain =
+            CHAT_PREVIEW_STATE.chatPreviewEl != null ||
+            (CHAT_PREVIEW_STATE.settledPreviews || []).length > 0;
+          if (!previewsRemain || ++attempt >= MAX_ATTEMPTS) {
             return;
           }
           setTimeout(tryReload, RETRY_DELAY);

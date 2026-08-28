@@ -3,6 +3,7 @@ import { JSDOM } from 'jsdom';
 import {
   clearChatPreviewState as clearChatPreview,
   finishChatPreviewState as finishChatPreview,
+  reconcilePreviewsWithCanonical,
   renderChatPreviewState as renderChatPreview,
   renderPendingChatState as renderPendingChat,
   startRunningSpinner,
@@ -161,5 +162,80 @@ describe('chat preview', () => {
     clearChatPreview(state, { keepAssistant: false });
     expect(dom.window.document.getElementById('chat-preview-stream')).toBeNull();
     expect(state.chatPreviewEl).toBeNull();
+  });
+
+  // A second message must NOT overwrite the finished first message's text
+  // while its canonical entry is still in flight (slow reload fetch): the
+  // finished preview is archived and both stay on the page.
+  it('archives a finished preview when the next message starts streaming', () => {
+    const dom = new JSDOM(
+      '<body><div id="messages"></div><div id="chat-preview-host"></div></body>',
+    );
+    const doc = dom.window.document;
+    const state = {
+      chatPreviewEl: null,
+      pendingUserEl: null,
+      previewText: '',
+      settledPreviews: [],
+    };
+    const opts = { documentImpl: doc, renderMarkdown: (t) => t };
+
+    renderChatPreview({ content: 'Message one.', done: false }, state, opts);
+    renderChatPreview({ content: 'Message one.', done: true }, state, opts);
+    // Next message begins — archive the finished one, stream into a fresh el.
+    renderChatPreview({ content: 'Message two.', done: false }, state, opts);
+
+    expect(state.settledPreviews).toHaveLength(1);
+    expect(state.settledPreviews[0].text).toBe('Message one.');
+    expect(doc.getElementById('chat-preview-host').textContent).toContain('Message one.');
+    expect(doc.getElementById('chat-preview-host').textContent).toContain('Message two.');
+    expect(state.previewText).toBe('Message two.');
+  });
+
+  it('reconcile removes only the preview chunks whose canonical entry arrived', () => {
+    const dom = new JSDOM(
+      '<body><div id="messages"></div><div id="chat-preview-host"></div></body>',
+    );
+    const doc = dom.window.document;
+    const state = {
+      chatPreviewEl: null,
+      pendingUserEl: null,
+      previewText: '',
+      settledPreviews: [],
+    };
+    const opts = { documentImpl: doc, renderMarkdown: (t) => t };
+
+    // Two finished messages archived; a third is mid-stream (not done).
+    renderChatPreview({ content: 'One.', done: true }, state, opts);
+    renderChatPreview({ content: 'Two.', done: true }, state, opts);
+    renderChatPreview({ content: 'Three streaming', done: false }, state, opts);
+    expect(state.settledPreviews).toHaveLength(2);
+
+    // Only message One's canonical entry lands.
+    reconcilePreviewsWithCanonical(
+      state,
+      [{ message: { role: 'assistant', content: [{ type: 'text', text: 'One.' }] } }],
+      { running: () => true },
+    );
+    expect(state.settledPreviews.map((p) => p.text)).toEqual(['Two.']);
+    // The live mid-stream preview is untouched (its text isn't canonical yet).
+    expect(state.chatPreviewEl).toBeTruthy();
+    expect(state.previewText).toBe('Three streaming');
+
+    // Two's entry lands, and the live one finishes + becomes canonical.
+    state.chatPreviewEl.classList.add('done');
+    reconcilePreviewsWithCanonical(
+      state,
+      [
+        { message: { role: 'assistant', content: [{ type: 'text', text: 'Two.' }] } },
+        {
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Three streaming done' }] },
+        },
+      ],
+      { running: () => false },
+    );
+    expect(state.settledPreviews).toHaveLength(0);
+    expect(state.chatPreviewEl).toBeNull();
+    expect(doc.getElementById('chat-preview-host').textContent).toBe('');
   });
 });

@@ -142,6 +142,68 @@ describe('live events', () => {
     expect(clearPendingUser).toHaveBeenCalled();
   });
 
+  it('does not clear preview when the new assistant entry is not the previewed message', async () => {
+    // pi flushes a message only after its tool-call args finish streaming, so
+    // the preview can show text that is not on disk yet while an OLDER
+    // message's entry lands late (watcher debounce + slow fetch). Clearing on
+    // that entry would vanish the streamed text until its own message flushes.
+    const entries = [
+      { id: 'welcome' },
+      {
+        id: 'older-assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Earlier reply.' }] },
+      },
+    ];
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ entries }), { status: 200 })),
+    );
+    const entryState = { seen: new Set(['welcome']), liveRendered: new Set() };
+    const clearChatPreview = vi.fn();
+
+    await handleSessionReload({
+      sessionId: 's',
+      fetchImpl,
+      entryState,
+      clearChatPreview,
+      previewText: () => 'Streamed text still only in the preview.',
+      onReloaded: vi.fn(),
+    });
+
+    expect(clearChatPreview).not.toHaveBeenCalled();
+  });
+
+  it('clears preview when the canonical entry containing the previewed text arrives', async () => {
+    const entries = [
+      { id: 'welcome' },
+      {
+        id: 'previewed-msg',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'Streamed text still only in the preview.' },
+            { type: 'toolCall', id: 'c1', name: 'bash', arguments: {} },
+          ],
+        },
+      },
+    ];
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ entries }), { status: 200 })),
+    );
+    const entryState = { seen: new Set(['welcome']), liveRendered: new Set() };
+    const clearChatPreview = vi.fn();
+
+    await handleSessionReload({
+      sessionId: 's',
+      fetchImpl,
+      entryState,
+      clearChatPreview,
+      previewText: () => 'Streamed text still only in the preview.',
+      onReloaded: vi.fn(),
+    });
+
+    expect(clearChatPreview).toHaveBeenCalled();
+  });
+
   it('clears pending user on reload that brings a new canonical user message', async () => {
     // A brand-new canonical user message arrived — the optimistic
     // #chat-pending-user is now redundant and should be removed while keeping
