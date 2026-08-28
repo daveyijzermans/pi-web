@@ -192,6 +192,37 @@ describe('chat preview', () => {
     expect(state.previewText).toBe('Message two.');
   });
 
+  // A thinking-only / tool-only message produces a done preview with no answer
+  // text. It must NOT be archived (reconcile matches by text, so it would
+  // strand in the preview host below #messages); it is removed so the next
+  // message streams fresh and the canonical entry renders in #messages.
+  it('does not archive a finished preview that has no answer text', () => {
+    const dom = new JSDOM(
+      '<body><div id="messages"></div><div id="chat-preview-host"></div></body>',
+    );
+    const doc = dom.window.document;
+    const state = {
+      chatPreviewEl: null,
+      pendingUserEl: null,
+      previewText: '',
+      settledPreviews: [],
+    };
+    const opts = { documentImpl: doc, renderMarkdown: (t) => t };
+
+    // A thinking-only message: thinking content, empty answer text, then done.
+    renderChatPreview({ content: '', thinking: 'Pondering.', done: true }, state, opts);
+    expect(state.chatPreviewEl.classList.contains('done')).toBe(true);
+
+    // Next message begins streaming.
+    renderChatPreview({ content: 'Next message.', done: false }, state, opts);
+
+    // The thinking-only preview was removed, not archived/stranded.
+    expect(state.settledPreviews).toHaveLength(0);
+    const host = doc.getElementById('chat-preview-host');
+    expect(host.textContent).not.toContain('Pondering.');
+    expect(host.textContent).toContain('Next message.');
+  });
+
   it('reconcile removes only the preview chunks whose canonical entry arrived', () => {
     const dom = new JSDOM(
       '<body><div id="messages"></div><div id="chat-preview-host"></div></body>',

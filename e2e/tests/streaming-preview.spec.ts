@@ -80,6 +80,20 @@ async function runToolyTurnAndCollect(page): Promise<{ phrase: string; at: numbe
     timeout: 30_000,
   });
 
+  // Once the turn has settled, the preview host must be empty: every preview
+  // chunk (text or thinking-only) is reconciled/removed, not stranded at the
+  // bottom of the page. A thinking-only message has no answer text to match,
+  // so a stranded chunk would linger here until a refresh.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => document.getElementById("chat-preview-host")?.textContent?.trim() ?? "",
+        ),
+      { timeout: 15_000 },
+    )
+    .toBe("");
+
   return page.evaluate(() => window.__piVanished);
 }
 

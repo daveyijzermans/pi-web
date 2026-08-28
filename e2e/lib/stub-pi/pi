@@ -121,6 +121,16 @@ async function streamText(text) {
   send({ type: "message_update", assistantMessageEvent: { type: "text_end", content: text } });
 }
 
+async function streamThinking(text) {
+  send({ type: "message_update", assistantMessageEvent: { type: "thinking_start" } });
+  const words = text.split(/(?<= )/);
+  for (const word of words) {
+    send({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: word } });
+    await sleep(60);
+  }
+  send({ type: "message_update", assistantMessageEvent: { type: "thinking_end", content: text } });
+}
+
 function toolCallEntry(parentId, text, callId) {
   const id = nextId();
   appendEntry({
@@ -184,10 +194,35 @@ async function runToolyTurn(userText, gap) {
   send({ type: "message_end" });
   const tr2 = toolResultEntry(a2, call2);
 
+  // Message 2b: a THINKING-ONLY message (thinking + tool call, no answer
+  // text). Its preview has no text to protect, so it must not strand in the
+  // preview host — its canonical entry renders in #messages.
+  await sleep(300);
+  await streamThinking("Pondering the next move carefully.");
+  await sleep(200);
+  const call2b = `stub-call-${idSeq++}`;
+  const a2bParent = nextId();
+  appendEntry({
+    type: "message",
+    id: a2bParent,
+    parentId: tr2,
+    timestamp: new Date().toISOString(),
+    message: {
+      role: "assistant",
+      content: [
+        { type: "thinking", thinking: "Pondering the next move carefully." },
+        { type: "toolCall", id: call2b, name: "bash", arguments: { command: "true" } },
+      ],
+      timestamp: Date.now(),
+    },
+  });
+  send({ type: "message_end" });
+  const tr2b = toolResultEntry(a2bParent, call2b);
+
   // Message 3: quick closing text, then the turn ends.
   await sleep(300);
   await streamText(TOOLY_TEXT_3);
-  appendEntry(messageEntry("assistant", TOOLY_TEXT_3, tr2).entry);
+  appendEntry(messageEntry("assistant", TOOLY_TEXT_3, tr2b).entry);
   send({ type: "message_end" });
   send({ type: "turn_end" });
   send({ type: "agent_end" });

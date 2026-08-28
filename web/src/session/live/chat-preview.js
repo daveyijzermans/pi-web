@@ -271,9 +271,22 @@ export function renderPendingChatState(
 function archiveDonePreview(state) {
   const el = state.chatPreviewEl;
   if (!el || !el.classList.contains('done')) return;
+  const text = String(state.previewText || '').trim();
+  if (!text) {
+    // No streamed answer text to protect — a thinking-only or tool-only
+    // message. reconcilePreviewsWithCanonical matches archived chunks by
+    // text, so an empty chunk would never match and would strand in the
+    // preview host (which renders below #messages). Its canonical entry
+    // renders in #messages anyway, so just drop it and stream the next
+    // message into a fresh element.
+    if (el.parentNode) el.parentNode.removeChild(el);
+    state.chatPreviewEl = null;
+    state.previewText = '';
+    return;
+  }
   el.removeAttribute('id');
   if (!state.settledPreviews) state.settledPreviews = [];
-  state.settledPreviews.push({ el, text: String(state.previewText || '') });
+  state.settledPreviews.push({ el, text });
   state.chatPreviewEl = null;
   state.previewText = '';
 }
