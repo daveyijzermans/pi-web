@@ -149,6 +149,25 @@ func (m *Manager) reapLoop() {
 }
 
 func (m *Manager) reapOnce(now time.Time) {
+	// Wedge sweep first: a worker stuck "running" with a dead RPC loop would
+	// otherwise pin its session's status forever (agent_end never arrives) and
+	// is invisible to the idle reap below. Collect candidates under the lock,
+	// probe outside it — a probe blocks up to its RPC timeout.
+	m.mu.Lock()
+	var probes []wedgeProbe
+	for _, w := range m.workers {
+		if p, ok := w.(wedgeProbe); ok && w.Status().State == WorkerStateRunning {
+			probes = append(probes, p)
+		}
+	}
+	m.mu.Unlock()
+	for _, p := range probes {
+		// A kill flips the worker to error state; it stays in the map and is
+		// replaced by workerFor on the session's next send, like any other
+		// dead worker.
+		_ = p.ProbeIfWedged(now)
+	}
+
 	m.mu.Lock()
 	var dead []ChatWorker
 	for id, w := range m.workers {
@@ -381,4 +400,10 @@ func (m *Manager) workerFor(sessionID, sessionPath string) (ChatWorker, error) {
 
 type idleReportable interface {
 	IdleSince(now time.Time) time.Duration
+}
+
+// wedgeProbe is the optional interface a worker implements to let the reaper
+// health-check a long-"running" worker and kill it when its RPC loop is dead.
+type wedgeProbe interface {
+	ProbeIfWedged(now time.Time) bool
 }

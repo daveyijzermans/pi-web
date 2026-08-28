@@ -295,3 +295,111 @@ func TestPiCommandArgsIncludesApprove(t *testing.T) {
 		t.Fatal("pi command args must include --mode rpc")
 	}
 }
+
+// A wedged worker (RPC loop dead, abort never acked) must not hang the cancel
+// endpoint: Abort kills the worker and reports success — the jam is cleared.
+func TestAbortKillsUnresponsiveWorker(t *testing.T) {
+	oldTimeout := abortResponseTimeout
+	abortResponseTimeout = 50 * time.Millisecond
+	defer func() { abortResponseTimeout = oldTimeout }()
+
+	var buf bytes.Buffer
+	w := &piRPCWorker{
+		stdin:   nopWriteCloser{&buf},
+		status:  workers.WorkerStatus{State: workers.WorkerStateRunning},
+		pending: make(map[string]chan response),
+	}
+
+	if err := w.Abort(context.Background()); err != nil {
+		t.Fatalf("Abort on wedged worker = %v, want nil (kill + success)", err)
+	}
+	if got := w.Status(); got.State != workers.WorkerStateError {
+		t.Fatalf("status after killed abort = %q, want error", got.State)
+	}
+}
+
+func TestAbortSetsIdleOnAck(t *testing.T) {
+	var buf bytes.Buffer
+	w := &piRPCWorker{
+		stdin:   nopWriteCloser{&buf},
+		status:  workers.WorkerStatus{State: workers.WorkerStateRunning},
+		pending: make(map[string]chan response),
+	}
+	done := make(chan error, 1)
+	go func() { done <- w.Abort(context.Background()) }()
+	waitForPending(t, w, "req-1")
+	w.handleRPCLine(`{"type":"response","id":"req-1","success":true}`)
+	if err := <-done; err != nil {
+		t.Fatalf("Abort error: %v", err)
+	}
+	if got := w.Status(); got.State != workers.WorkerStateIdle {
+		t.Fatalf("status after acked abort = %q, want idle", got.State)
+	}
+}
+
+// A worker stuck "running" whose get_state probe times out is wedged: kill it
+// so the status flips to error (reads as not-running) instead of pinning the
+// session "running" forever.
+func TestProbeIfWedgedKillsUnresponsiveRunningWorker(t *testing.T) {
+	oldTimeout := wedgeProbeTimeout
+	wedgeProbeTimeout = 50 * time.Millisecond
+	defer func() { wedgeProbeTimeout = oldTimeout }()
+
+	var buf bytes.Buffer
+	w := &piRPCWorker{
+		stdin:   nopWriteCloser{&buf},
+		status:  workers.WorkerStatus{State: workers.WorkerStateRunning},
+		pending: make(map[string]chan response),
+	}
+
+	if !w.ProbeIfWedged(time.Now()) {
+		t.Fatal("ProbeIfWedged = false, want true (kill) for unresponsive running worker")
+	}
+	if got := w.Status(); got.State != workers.WorkerStateError {
+		t.Fatalf("status after wedge kill = %q, want error", got.State)
+	}
+}
+
+func TestProbeIfWedgedSparesResponsiveRunningWorker(t *testing.T) {
+	var buf bytes.Buffer
+	w := &piRPCWorker{
+		stdin:   nopWriteCloser{&buf},
+		status:  workers.WorkerStatus{State: workers.WorkerStateRunning},
+		pending: make(map[string]chan response),
+	}
+	killed := make(chan bool, 1)
+	go func() { killed <- w.ProbeIfWedged(time.Now()) }()
+	waitForPending(t, w, "req-1")
+	w.handleRPCLine(`{"type":"response","id":"req-1","success":true,"data":{}}`)
+	if <-killed {
+		t.Fatal("ProbeIfWedged killed a worker whose RPC loop answered")
+	}
+	if got := w.Status(); got.State != workers.WorkerStateRunning {
+		t.Fatalf("status after healthy probe = %q, want running", got.State)
+	}
+}
+
+func TestProbeIfWedgedSkipsIdleAndActiveWorkers(t *testing.T) {
+	var buf bytes.Buffer
+	idle := &piRPCWorker{
+		stdin:   nopWriteCloser{&buf},
+		status:  workers.WorkerStatus{State: workers.WorkerStateIdle},
+		pending: make(map[string]chan response),
+	}
+	if idle.ProbeIfWedged(time.Now()) {
+		t.Fatal("ProbeIfWedged killed an idle worker")
+	}
+
+	active := &piRPCWorker{
+		stdin:   nopWriteCloser{&buf},
+		status:  workers.WorkerStatus{State: workers.WorkerStateRunning},
+		pending: make(map[string]chan response),
+	}
+	active.noteStreamActivity()
+	if active.ProbeIfWedged(time.Now()) {
+		t.Fatal("ProbeIfWedged killed a worker with recent stream activity")
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("skipped probes wrote RPC commands: %q", buf.String())
+	}
+}

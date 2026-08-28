@@ -433,3 +433,43 @@ func TestEnsureWorkerCreatesWorkerWithoutSendingMessage(t *testing.T) {
 		t.Fatalf("status = %q, want idle", status.State)
 	}
 }
+
+type wedgeProbeWorker struct {
+	fakeChatWorker
+	mu      sync.Mutex
+	probed  int
+	confirm bool
+}
+
+func (w *wedgeProbeWorker) ProbeIfWedged(now time.Time) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.probed++
+	return w.confirm
+}
+
+func TestReapOnceProbesRunningWorkersForWedge(t *testing.T) {
+	running := &wedgeProbeWorker{fakeChatWorker: fakeChatWorker{streaming: true}}
+	idle := &wedgeProbeWorker{}
+	m := NewManagerWithTTL(func(sessionID, sessionPath string) (ChatWorker, error) {
+		return nil, errors.New("unused")
+	}, 0)
+	defer m.Close()
+	m.workers["running.jsonl"] = running
+	m.workers["idle.jsonl"] = idle
+
+	m.reapOnce(time.Now())
+
+	running.mu.Lock()
+	rp := running.probed
+	running.mu.Unlock()
+	if rp != 1 {
+		t.Fatalf("running worker probed %d times, want 1", rp)
+	}
+	idle.mu.Lock()
+	ip := idle.probed
+	idle.mu.Unlock()
+	if ip != 0 {
+		t.Fatalf("idle worker probed %d times, want 0", ip)
+	}
+}

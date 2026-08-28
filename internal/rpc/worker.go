@@ -230,16 +230,71 @@ func (w *piRPCWorker) Compact(ctx context.Context) error {
 	return w.sendAndAwait(ctx, BuildCompactCommand(w.nextID()))
 }
 
+// abortResponseTimeout bounds how long Abort waits for pi to ack. The ack is
+// immediate on a healthy worker; no answer means the RPC loop is wedged.
+var abortResponseTimeout = 10 * time.Second
+
 func (w *piRPCWorker) Abort(ctx context.Context) error {
 	w.touch()
-	if err := w.sendAndAwait(ctx, BuildAbortCommand(w.nextID())); err != nil {
-		return err
+	// Decouple from the caller's context: cancel is the user's unjam lever and
+	// must complete (or kill the worker) even if the HTTP client disconnects.
+	// Unbounded, an abort sent to a wedged worker hangs the cancel endpoint
+	// forever and leaves the session pinned "running" with no way out.
+	actx, cancel := context.WithTimeout(context.Background(), abortResponseTimeout)
+	defer cancel()
+	if err := w.sendAndAwait(actx, BuildAbortCommand(w.nextID())); err != nil {
+		// No ack: the worker cannot be talked to. Cancel's contract is "stop
+		// the turn", and a dead worker is stopped — kill the process so the
+		// stale running state clears and the manager replaces the worker on
+		// the next send.
+		_ = w.Close()
+		w.setError(fmt.Errorf("worker unresponsive to abort; killed: %w", err))
+		return nil
 	}
 	w.mu.Lock()
 	w.status.State = workers.WorkerStateIdle
 	w.status.Error = ""
 	w.mu.Unlock()
 	return nil
+}
+
+// wedgeProbeAfter is how long a "running" worker may go without any stream
+// event before the reaper probes its RPC loop. Healthy turns stream
+// message_updates constantly; silent gaps (long tool calls) still answer
+// get_state, so a probe timeout means the worker is wedged.
+var wedgeProbeAfter = 2 * time.Minute
+
+// wedgeProbeTimeout bounds the get_state round-trip of a wedge probe.
+var wedgeProbeTimeout = 15 * time.Second
+
+// ProbeIfWedged health-checks a worker that claims to be running but has
+// produced no stream events (and seen no user action) for wedgeProbeAfter: a
+// get_state round-trip proves the RPC loop is alive. If the probe gets no
+// answer the worker is wedged mid-turn — a state only agent_end or abort can
+// clear, and neither will ever arrive — so kill it. The process death flips
+// the cached status to error, which reads as not-running, and the manager
+// replaces error workers on the next send. Returns true when it killed.
+func (w *piRPCWorker) ProbeIfWedged(now time.Time) bool {
+	w.mu.Lock()
+	running := w.status.State == workers.WorkerStateRunning
+	w.mu.Unlock()
+	if !running {
+		return false
+	}
+	if last := w.lastStreamActivity.Load(); last != 0 && now.Sub(time.Unix(0, last)) < wedgeProbeAfter {
+		return false
+	}
+	if last := w.lastActive.Load(); last != 0 && now.Sub(time.Unix(0, last)) < wedgeProbeAfter {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), wedgeProbeTimeout)
+	defer cancel()
+	if _, err := w.GetState(ctx); err != nil {
+		_ = w.Close()
+		w.setError(fmt.Errorf("worker wedged: running but unresponsive to get_state; killed: %w", err))
+		return true
+	}
+	return false
 }
 
 func (w *piRPCWorker) GetState(ctx context.Context) (workers.WorkerStatus, error) {
