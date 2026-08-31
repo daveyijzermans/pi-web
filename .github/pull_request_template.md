@@ -3,13 +3,6 @@ Thanks for contributing to pi-web! Per CONTRIBUTING.md, please open an issue
 first so we can discuss before code is written. Link that issue below.
 -->
 
-## Workflow Checklist
-
-- [ ] Linked issue exists and is open (see "Related issue" below)
-- [ ] Branch follows `type/issueN-description` naming
-- [ ] Commits follow [Conventional Commits](docs/dev/workflow.md)
-- [ ] Changes within size limits (10 files, 300 lines) or justified
-
 ## Summary
 
 <!-- What changed and why. Focus on the "why" — the motivation behind the change. -->
@@ -47,13 +40,4 @@ If this PR touches session rendering, remember pi-web has two render paths
 - [ ] `make check` passes (test + build + vet)
 - [ ] Frontend tests (`vitest`) cover the change
 - [ ] Go tests (`go test ./...`) cover the change
-
-## E2E Testing
-
-<!-- See [Issue Resolution Guide](docs/dev/issue-resolution.md) for requirements. -->
-
-- [ ] `make e2e` passes
-- [ ] New E2E spec added (if UI-visible change) — path: `e2e/tests/issueN-*.spec.ts`
-- [ ] Screenshots captured in `e2e/.shots/issueN-*.png`
-- [ ] Screenshots reviewed for visual correctness (headed mode)
-- [ ] Screenshots pasted in PR body (if UI-visible change)
+- [ ] UI changes verified in a browser
