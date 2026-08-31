@@ -105,9 +105,6 @@ export function defaultFetchSessions({ limit, offset, query, project } = {}) {
   const qs = params.toString();
   return getJSON('/api/sessions' + (qs ? '?' + qs : ''));
 }
-export function defaultFetchRecent() {
-  return getJSON('/api/recent-locations');
-}
 export function defaultBrowseDirectory(path, query) {
   const params = new URLSearchParams();
   if (path) params.set('path', path);

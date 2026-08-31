@@ -872,12 +872,13 @@ body.modal-sheet-open { overflow: hidden; }
 .switch input:checked + .switch-slider { background: var(--accent); }
 .switch input:checked + .switch-slider::before { transform: translateX(16px); background: var(--body-bg); }
 .switch input:focus-visible + .switch-slider { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
-/* Filter off: dim only the filter controls (the enable checkboxes, the
-   name-toggle, and select/deselect-all) so it reads as "filtering inactive"
-   without making the per-row management actions look disabled. */
+/* Filter off: dim ONLY the controls whose effect is inert without the master
+   filter — the enable checkboxes and select/deselect-all. Nothing else: the
+   project name is content (dimming it made whole rows read as disabled while
+   the delete/remove buttons kept working), and every management action works
+   regardless of the filter. */
 .projects-config.filter-off .projects-bulk-btn,
-.projects-config.filter-off .project-row input[type='checkbox'],
-.projects-config.filter-off .project-row-name { opacity: 0.5; }
+.projects-config.filter-off .project-row input[type='checkbox'] { opacity: 0.5; }
 .projects-toolbar {
     display: flex;
     align-items: stretch;

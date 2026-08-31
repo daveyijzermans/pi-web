@@ -24,7 +24,6 @@
     defaultArchiveSession,
     defaultCreateSession,
     defaultFetchProjects,
-    defaultFetchRecent,
     defaultFetchSessions,
     defaultUpdateProject,
     layoutStorageKey,
@@ -41,7 +40,6 @@
   const runningStatuses = new SvelteMap();
   let newSessionOpen = $state(false);
   let newSessionPath = $state('');
-  let recentLocations = $state([]);
   let creating = $state(false);
   let newSessionError = $state('');
   let menuOpen = $state(false);
@@ -139,12 +137,10 @@
     newSessionPath = '';
     newSessionError = '';
     document.body?.classList.add('modal-sheet-open');
-    try {
-      const response = await defaultFetchRecent();
-      recentLocations = (response.locations || []).slice(0, 10);
-    } catch {
-      recentLocations = [];
-    }
+    // The location chips mirror the Manage Projects list (session-derived ∪
+    // registered projects) — not raw recent session dirs, which accumulate
+    // stale scratch cwds (/tmp/tmp.*) from deleted or empty sessions.
+    await refreshProjectsList();
     await tick();
   }
 
@@ -400,7 +396,7 @@
 
 <NewSessionModal
   open={newSessionOpen}
-  recent={recentLocations}
+  recent={projects.map((p) => p.path)}
   bind:path={newSessionPath}
   {creating}
   error={newSessionError}
