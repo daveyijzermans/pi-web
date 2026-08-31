@@ -20,14 +20,19 @@ var gzipWriterPool = sync.Pool{New: func() any { return gzip.NewWriter(io.Discar
 // turning a multi-MB body into a few hundred KB on the wire (the dominant cost
 // on a slow link).
 //
-// Server-Sent Events must NOT be compressed: they stream incrementally and a
-// compressor would buffer/reframe them. The decision is made lazily on the
-// first write from the handler's Content-Type, so any handler that sets
-// text/event-stream bypasses compression automatically — no path list to keep
-// in sync.
+// Not compressed:
+//   - Server-Sent Events — they stream incrementally and a compressor would
+//     buffer/reframe them. Decided lazily on the first write from the
+//     handler's Content-Type, so no path list to keep in sync.
+//   - Range requests — http.ServeContent's 206 byte ranges address the raw
+//     representation; encoding the slice would corrupt resumed downloads.
+//   - Bodyless statuses (1xx/204/304) — net/http suppresses their bodies, so
+//     a gzip header/trailer write would be dropped and Content-Encoding lie.
+//   - Content types that are already compressed (images, archives, fonts,
+//     audio/video) — re-gzipping wastes CPU for zero or negative gain.
 func GzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") || r.Header.Get("Range") != "" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -44,6 +49,28 @@ type gzipResponseWriter struct {
 	passthrough bool // SSE / already-encoded: write raw, no compression
 }
 
+// incompressible reports content types that gain nothing from gzip because
+// their formats are already compressed.
+func incompressible(ct string) bool {
+	if strings.HasPrefix(ct, "image/") && !strings.HasPrefix(ct, "image/svg") {
+		return true
+	}
+	if strings.HasPrefix(ct, "video/") || strings.HasPrefix(ct, "audio/") {
+		return true
+	}
+	for _, t := range []string{
+		"application/zip", "application/gzip", "application/x-gzip",
+		"application/x-7z-compressed", "application/x-rar-compressed",
+		"application/zstd", "application/x-xz", "application/x-bzip2",
+		"font/woff", "font/woff2", "application/font-woff",
+	} {
+		if strings.HasPrefix(ct, t) {
+			return true
+		}
+	}
+	return false
+}
+
 func (g *gzipResponseWriter) WriteHeader(status int) {
 	if g.wroteHeader {
 		return
@@ -51,7 +78,9 @@ func (g *gzipResponseWriter) WriteHeader(status int) {
 	g.wroteHeader = true
 	h := g.Header()
 	ct := h.Get("Content-Type")
-	if strings.HasPrefix(ct, "text/event-stream") || h.Get("Content-Encoding") != "" {
+	bodyless := status < 200 || status == http.StatusNoContent || status == http.StatusNotModified
+	if bodyless || strings.HasPrefix(ct, "text/event-stream") ||
+		h.Get("Content-Encoding") != "" || incompressible(ct) {
 		g.passthrough = true
 		g.ResponseWriter.WriteHeader(status)
 		return

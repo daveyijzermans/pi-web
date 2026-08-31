@@ -8,7 +8,7 @@
 </script>
 
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { escapeHtml } from '../../session/render/session-format.js';
   import { getSessionRuntime } from '../../session/session-runtime-context.js';
   import * as chatApi from '../../session/chat/chat-api.js';
@@ -17,8 +17,11 @@
   import ChatSelectorPopups from './chat/ChatSelectorPopups.svelte';
   import ChatToolbar from './chat/ChatToolbar.svelte';
   import ContextUsage from './chat/ContextUsage.svelte';
+  import QueuePanel from './chat/QueuePanel.svelte';
   import TextAttachmentModal from './chat/TextAttachmentModal.svelte';
   import { ChatToolbarState, chatRunningStore } from './chat/chat-toolbar-state.svelte.js';
+  import { QueueStore } from './chat/queue-store.svelte.js';
+  import { createQueueApi } from './chat/queue-api.js';
   import { icon, ChevronDown } from '../../shared/icons.js';
 
   let {
@@ -32,6 +35,20 @@
   // Reactive toolbar state owned here so the live runtime can mutate it while
   // <ChatToolbar> renders from it.
   const toolbar = new ChatToolbarState();
+  // Reactive queue panel state — shared with chat-composer-runtime so its
+  // steer/queue glue mutates the same items <QueuePanel> renders. The queued
+  // items live on the server (chat_queue table); we hydrate on mount and
+  // re-fetch on SSE 'queue' events so other tabs (and the autonomous
+  // backend drainer) stay in sync.
+  const queueApi = untrack(() =>
+    sessionId
+      ? createQueueApi({
+          sessionId,
+          fetchImpl: typeof window !== 'undefined' ? window.fetch.bind(window) : undefined,
+        })
+      : null,
+  );
+  const queueStore = new QueueStore({ api: queueApi });
 
   // Mirror the worker-running state into the shared store so <LiveReload> drives the
   // streaming spinner from the same source of truth. Reset on teardown so a stale
@@ -58,6 +75,10 @@
       leafId: model?.leafId || '',
       urlTargetId: model?.urlTargetId || '',
       byId: model?.byId || new Map(),
+      // Live getter: steer-queue uses this on every pi-session-reload to look
+      // for a matching user entry and clear the corresponding steer chip once
+      // pi has folded the steer into the conversation.
+      getLiveEntries: () => (model ? model.entries : []),
       navigateTo: runtime.navigateTo,
       escapeHtml: (text) => escapeHtml(text, { documentImpl: document }),
       chatApi,
@@ -66,8 +87,21 @@
       CustomEventImpl: target.CustomEvent,
       setIntervalImpl: target.setInterval.bind(target),
       toolbar,
+      queueStore,
+      queueApi,
     });
-    return dispose;
+
+    // Initial hydration from the server-side queue + subscribe to SSE 'queue'
+    // events so changes from the autonomous drainer (or another tab) show up
+    // immediately. The EventSource is shared with <LiveReload> — both attach
+    // their own listeners.
+    void queueStore.refresh?.();
+    const onQueueEvent = () => queueStore.refresh?.();
+    target.addEventListener('pi-queue-event', onQueueEvent);
+    return () => {
+      target.removeEventListener('pi-queue-event', onQueueEvent);
+      if (typeof dispose === 'function') dispose();
+    };
   });
 </script>
 
@@ -79,6 +113,7 @@
   data-chat-disabled-reason={chatDisabledReason}
 >
   <input id="pi-chat-images" name="images" type="file" multiple hidden disabled={!chatAvailable} />
+  <QueuePanel store={queueStore} />
   <div class="pi-chat-shell">
     <ChatExpandButton {chatAvailable} />
     <!-- eslint-disable svelte/no-at-html-tags -- trusted: Lucide icon SVG -->

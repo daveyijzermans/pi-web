@@ -130,13 +130,50 @@ describe('SessionDataModel', () => {
     expect(m.currentLeafId).toBe('old');
   });
 
-  it('reconcile() refuses to shrink the entries array (stale reload guard)', () => {
+  it('reconcile() skips an out-of-order (stale) reload that lacks the newest entry', () => {
     const m = model();
-    // Simulate: model has 4 entries (including optimistic preview), but a
-    // reload fetched stale data with only 2 entries (worker hasn't flushed yet).
+    // Two reloads raced and the older response landed last: it overlaps our
+    // state but is missing the newest entry. Applying it would vanish 'leaf'.
     m.reconcile(entries.slice(0, 2));
     expect(m.entries).toHaveLength(4);
     expect(m.byId.has('leaf')).toBe(true);
+  });
+
+  it('reconcile() keeps load-earlier prefixes when a smaller tail window arrives', () => {
+    const m = model();
+    // The user loaded an earlier window: model now holds MORE than the server
+    // tail window. A live reload delivering the (smaller) tail window plus a
+    // new entry must merge — not be skipped, and not drop the earlier prefix.
+    const tailWindow = [
+      ...entries.slice(2), // mid, leaf — the window the server still returns
+      {
+        id: 'leaf2',
+        parentId: 'leaf',
+        timestamp: '2026-01-01T00:04:00Z',
+        type: 'message',
+        message: { role: 'assistant', content: 'new turn' },
+      },
+    ];
+    m.reconcile(tailWindow);
+    expect(m.entries.map((e) => e.id)).toEqual(['root', 'old', 'mid', 'leaf', 'leaf2']);
+    expect(m.byId.has('root')).toBe(true);
+    expect(m.byId.has('leaf2')).toBe(true);
+  });
+
+  it('reconcile() appends a disjoint newer window after the existing entries', () => {
+    const m = model();
+    // The tail window slid entirely past what we hold (many entries landed at
+    // once). Nothing overlaps; the new window belongs after our entries.
+    m.reconcile([
+      {
+        id: 'far1',
+        parentId: 'leaf',
+        timestamp: '2026-01-01T00:05:00Z',
+        type: 'message',
+        message: { role: 'assistant', content: 'far away' },
+      },
+    ]);
+    expect(m.entries.map((e) => e.id)).toEqual(['root', 'old', 'mid', 'leaf', 'far1']);
   });
 
   it('reconcile() skips no-op reloads (identical data guard)', () => {
@@ -187,11 +224,18 @@ describe('SessionDataModel', () => {
     ];
     const m = new SessionDataModel({ entries: unarchived, header: { cwd: '/x' }, leafId: 'na' });
     expect(m.activePath.map((e) => e.id)).toEqual(['h1', 'h2', 'mc', 'nu', 'na']);
-    // reconcile (live reload path) must repair it too
-    const m2 = model();
+    // reconcile (live reload path) must repair it too: the model holds the
+    // pre-unarchive history and a reload delivers the full set including the
+    // orphaned model_change.
+    const m2 = new SessionDataModel({
+      entries: unarchived.slice(0, 2),
+      header: { cwd: '/x' },
+      leafId: 'h2',
+    });
     m2.reconcile(unarchived);
     expect(m2.activePath.map((e) => e.id)).toContain('h1');
     expect(m2.activePath.map((e) => e.id)).toContain('h2');
+    expect(m2.activePath.map((e) => e.id)).toContain('na');
   });
 
   it('applies the search filter reactively', () => {
@@ -211,5 +255,4 @@ describe('SessionDataModel', () => {
     expect(m.currentLeafId).toBe('leaf');
     expect(m.currentTargetId).toBe('mid');
   });
-
 });

@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"pi-web/internal/git"
@@ -382,25 +383,6 @@ func cleanText(s string) string {
 	}
 	s = whitespaceRe.ReplaceAllString(s, " ")
 	return strings.TrimSpace(s)
-}
-
-// extractHeadingText collects lines after a heading until the next heading or EOF.
-func extractHeadingText(lines []string, start int) string {
-	var buf strings.Builder
-	for i := start; i < len(lines); i++ {
-		trimmed := strings.TrimSpace(lines[i])
-		if trimmed == "" {
-			continue
-		}
-		if strings.HasPrefix(trimmed, "##") {
-			break
-		}
-		if buf.Len() > 0 {
-			buf.WriteString(" ")
-		}
-		buf.WriteString(trimmed)
-	}
-	return strings.TrimSpace(buf.String())
 }
 
 // enabledProjectSet returns the set of enabled project paths. The second return
@@ -788,19 +770,27 @@ func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// COALESCE: repo/readme_description are nullable (a rename inserts only the
+	// name), and scanning NULL into a plain string errors — which would silently
+	// discard the row and with it the user's saved name.
 	var name, repo, readmeDesc string
-	if err := s.db.QueryRow(
-		"SELECT name, repo, readme_description FROM projects WHERE project_path = ?",
-		path).Scan(&name, &repo, &readmeDesc); err != nil {
-		// Project not in table yet — generate defaults on the fly.
+	err := s.db.QueryRow(
+		"SELECT name, COALESCE(repo, ''), COALESCE(readme_description, '') FROM projects WHERE project_path = ?",
+		path).Scan(&name, &repo, &readmeDesc)
+	if err != nil || name == "" {
 		name = filepath.Base(path)
+	}
+	// Fill in whatever the row didn't provide (or the row was absent entirely).
+	if repo == "" {
 		if _, err := os.Stat(filepath.Join(path, ".git", "config")); err == nil {
 			repo = detectGithubRepo(path)
 		}
+	}
+	if readmeDesc == "" {
 		readmeDesc = extractReadmeDescription(path)
-		if readmeDesc == "" {
-			readmeDesc = git.RepoDescription(path)
-		}
+	}
+	if readmeDesc == "" {
+		readmeDesc = git.RepoDescription(path)
 	}
 
 	summaries, err := s.loadSummaries()
@@ -813,9 +803,20 @@ func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	gitInfo, _ := git.Describe(path)
-	issues := git.OpenIssues(path)
-	prs := git.OpenPRs(path)
+	// Each of these shells out (git / gh, the latter with a 4s network
+	// timeout); run them concurrently so the panel opens in one round-trip's
+	// worth of latency instead of the sum.
+	var (
+		gitInfo git.Info
+		issues  []git.IssueInfo
+		prs     []git.IssueInfo
+		wg      sync.WaitGroup
+	)
+	wg.Add(3)
+	go func() { defer wg.Done(); gitInfo, _ = git.Describe(path) }()
+	go func() { defer wg.Done(); issues = git.OpenIssues(path) }()
+	go func() { defer wg.Done(); prs = git.OpenPRs(path) }()
+	wg.Wait()
 
 	writeJSON(w, 0, map[string]any{
 		"project": map[string]any{

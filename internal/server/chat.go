@@ -342,6 +342,10 @@ func (s *Server) handleSetModel(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "provider and modelId required")
 		return
 	}
+	if s.chatSender == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "chat unavailable")
+		return
+	}
 	if err := s.chatSender.SetModel(r.Context(), resolved.Session.ID, resolved.Path, body.Provider, body.ModelID); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -366,6 +370,10 @@ func (s *Server) handleSetThinkingLevel(w http.ResponseWriter, r *http.Request) 
 	}
 	if body.Level == "" {
 		writeJSONError(w, http.StatusBadRequest, "level required")
+		return
+	}
+	if s.chatSender == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "chat unavailable")
 		return
 	}
 	if err := s.chatSender.SetThinkingLevel(r.Context(), resolved.Session.ID, resolved.Path, body.Level); err != nil {

@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,6 +49,26 @@ func TestHandleFilesDownload(t *testing.T) {
 		}
 		if rec.Body.String() != "package main" {
 			t.Errorf("unexpected body: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("escapes hostile and non-ASCII filenames in Content-Disposition", func(t *testing.T) {
+		name := `a"bé.txt`
+		os.WriteFile(filepath.Join(tmpDir, name), []byte("x"), 0644)
+		req := httptest.NewRequest(http.MethodGet,
+			"/api/files/download?path="+tmpDir+"&file="+url.QueryEscape(name), nil)
+		rec := httptest.NewRecorder()
+		s.handleFilesDownload(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		cd := rec.Header().Get("Content-Disposition")
+		if !strings.Contains(cd, `filename="a_b_.txt"`) {
+			t.Errorf("quoted filename not sanitized: %s", cd)
+		}
+		if !strings.Contains(cd, `filename*=UTF-8''a%22b%C3%A9.txt`) {
+			t.Errorf("filename* not percent-encoded: %s", cd)
 		}
 	})
 

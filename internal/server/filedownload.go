@@ -3,9 +3,9 @@ package server
 import (
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -66,11 +66,18 @@ func (s *Server) handleFilesDownload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := filepath.Base(target)
+	// Quoted filename: strip characters that would break or smuggle past the
+	// quoted-string (RFC 6266); filename*: RFC 5987 percent-encoded UTF-8 for
+	// non-ASCII names.
+	quoted := strings.Map(func(r rune) rune {
+		if r == '"' || r == '\\' || r < 0x20 || r > 0x7e {
+			return '_'
+		}
+		return r
+	}, name)
 	w.Header().Set("Content-Disposition",
-		`attachment; filename="`+name+`"; filename*=UTF-8''`+name)
+		`attachment; filename="`+quoted+`"; filename*=UTF-8''`+url.PathEscape(name))
 	w.Header().Set("Content-Type", ct)
-	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
-	w.Header().Set("Last-Modified", info.ModTime().UTC().Format(http.TimeFormat))
 	// no-cache forces the browser to revalidate against Last-Modified instead of
 	// heuristically serving a stale copy, so an edited file always downloads fresh.
 	w.Header().Set("Cache-Control", "no-cache")

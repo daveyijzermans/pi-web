@@ -35,23 +35,30 @@ func TestSessionViteSourceIncludesChatPreviewSSEHandling(t *testing.T) {
 	}
 }
 
-func TestSessionViteSourceShowsAnimatedWorkingPreviewLabel(t *testing.T) {
+// The streaming preview must show an animated working indicator while the
+// worker is busy: the JS builds a spinner element (startRunningSpinner /
+// startWorkingAnimation) and the CSS styles its waiting state.
+func TestSessionViteSourceShowsAnimatedWorkingPreview(t *testing.T) {
 	preview, err := os.ReadFile(repoPath("web/src/session/live/chat-preview.js"))
 	if err != nil {
 		t.Fatalf("read web/src/session/live/chat-preview.js: %v", err)
 	}
-	runner, err := os.ReadFile(repoPath("web/src/components/session/LiveReload.svelte"))
-	if err != nil {
-		t.Fatalf("read web/src/components/session/LiveReload.svelte: %v", err)
-	}
-	combined := string(preview) + string(runner)
+	combined := string(preview)
 	for _, want := range []string{
-		"working<span class=\"working-dots\"",
-		"chat-preview-working-dots",
-		"animation: chat-preview-working-dots",
+		"startRunningSpinner",
+		"startWorkingAnimation",
+		"chat-preview-waiting",
 	} {
-		if !strings.Contains(combined, want) && !strings.Contains(liveSessionCss, want) {
+		if !strings.Contains(combined, want) {
 			t.Fatalf("session frontend source missing %q", want)
+		}
+	}
+	for _, want := range []string{
+		"#chat-running-spinner",
+		".chat-preview-waiting",
+	} {
+		if !strings.Contains(liveSessionCss, want) {
+			t.Fatalf("session css missing %q", want)
 		}
 	}
 }

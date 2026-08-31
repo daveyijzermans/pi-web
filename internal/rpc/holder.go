@@ -127,11 +127,15 @@ func RunHolder(socketPath string) error {
 	}()
 
 	// Accept loop: one client at a time; a new attach replaces the old one
-	// (a dead server's conn may linger until its next write fails).
+	// (a dead server's conn may linger until its next write fails). An Accept
+	// error must NOT kill pi — it may be mid-turn writing the session file.
+	// Back off and retry; if the listener is permanently dead nobody can ever
+	// reattach and the idle self-reaper above ends the process once pi quiets.
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			h.terminate()
+			time.Sleep(time.Second)
+			continue
 		}
 		h.attach(conn, stdinWriter)
 	}

@@ -167,15 +167,25 @@ export function wireSessionEvents({
   windowImpl = typeof window !== 'undefined' ? window : null,
   CustomEventImpl = typeof CustomEvent !== 'undefined' ? CustomEvent : null,
 } = {}) {
+  const dispatchReloadedEvent = () => {
+    if (!windowImpl || !CustomEventImpl) return;
+    try {
+      windowImpl.dispatchEvent(new CustomEventImpl('pi-session-reload'));
+    } catch (_) {}
+  };
+
   eventSource.onmessage = (event) => {
     if (event.data !== 'reload') return;
-    onReload(event);
-    // Broadcast so other modules (e.g. chat composer status) can react
-    // immediately instead of waiting for their next poll tick.
-    if (windowImpl && CustomEventImpl) {
-      try {
-        windowImpl.dispatchEvent(new CustomEventImpl('pi-session-reload'));
-      } catch (_) {}
+    // `onReload` returns a Promise once handleSessionReload starts; await it so
+    // the broadcast fires *after* the model has the new entries. Otherwise
+    // listeners that read the model on this event (e.g. steer-queue reconciling
+    // its chips against newly-arrived user messages) race the fetch and see a
+    // stale snapshot.
+    const result = onReload(event);
+    if (result && typeof result.then === 'function') {
+      result.then(dispatchReloadedEvent, dispatchReloadedEvent);
+    } else {
+      dispatchReloadedEvent();
     }
   };
   eventSource.addEventListener('chat-preview', (event) => {
@@ -201,6 +211,16 @@ export function wireSessionEvents({
       }
     });
   }
+  // 'queue' is fired by the backend whenever the per-session chat_queue
+  // changes — autonomous drainer, another tab, etc. ChatComposer listens for
+  // pi-queue-event on the window and refetches /api/chat/queue.
+  eventSource.addEventListener('queue', () => {
+    if (windowImpl && CustomEventImpl) {
+      try {
+        windowImpl.dispatchEvent(new CustomEventImpl('pi-queue-event'));
+      } catch (_) {}
+    }
+  });
   // A manual compaction failed server-side. Compaction is fire-and-forget, so
   // the only way the footer/composer learns of a failure is this event; relay
   // it as a window event carrying the error message so listeners can toast it.

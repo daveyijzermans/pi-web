@@ -29,6 +29,9 @@ func newProjectPrefsDB(t *testing.T) *sql.DB {
 	if _, err := db.Exec(appSettingsSchema); err != nil {
 		t.Fatalf("create app_settings: %v", err)
 	}
+	if _, err := db.Exec(projectsSchema); err != nil {
+		t.Fatalf("create projects: %v", err)
+	}
 	t.Cleanup(func() { db.Close() })
 	return db
 }
@@ -444,6 +447,40 @@ func TestHandleApiProjectsPagination(t *testing.T) {
 	second, total := getPage("/api/projects?limit=20&offset=20&current=/home/user/project-24")
 	if len(second) != 5 || total != 25 {
 		t.Fatalf("second page = %d projects, total %d; want 5, 25", len(second), total)
+	}
+}
+
+// A rename inserts only (project_path, name) — repo/readme_description stay
+// NULL. handleGetProject must still return the saved name instead of erroring
+// on the NULL scan and regenerating the basename default.
+func TestHandleGetProject_NameOnlyRowKeepsSavedName(t *testing.T) {
+	s := &Server{db: newProjectPrefsDB(t), sessionsDir: t.TempDir(), cache: sessions.NewCache(), now: time.Now}
+	projectPath := t.TempDir() // plain dir: no .git, no README, no gh calls
+
+	body, _ := json.Marshal(map[string]string{"path": projectPath, "name": "My Custom Name"})
+	req := httptest.NewRequest(http.MethodPost, "/api/project/update", strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	s.handleUpdateProjectName(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("update name status = %d: %s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/project/"+projectPath, nil)
+	w = httptest.NewRecorder()
+	s.handleGetProject(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("get project status = %d: %s", w.Code, w.Body.String())
+	}
+	var payload struct {
+		Project struct {
+			Name string `json:"name"`
+		} `json:"project"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Project.Name != "My Custom Name" {
+		t.Fatalf("name = %q, want the saved custom name", payload.Project.Name)
 	}
 }
 

@@ -59,6 +59,7 @@ export class SessionDataModel {
   // SvelteMap makes .set/.clear reactive while keeping a stable object identity.
   byId = new SvelteMap();
   toolCallMap = new SvelteMap();
+  toolResultMap = new SvelteMap();
   labelMap = new SvelteMap();
 
   // ── view state ──────────────────────────────────────────────────────────
@@ -144,6 +145,7 @@ export class SessionDataModel {
     const lk = buildSessionLookups(this.entries);
     refillMap(this.byId, lk.byId);
     refillMap(this.toolCallMap, lk.toolCallMap);
+    refillMap(this.toolResultMap, lk.toolResultMap);
     refillMap(this.labelMap, lk.labelMap);
 
     this.leafId = data.leafId ?? data.defaultLeafId ?? '';
@@ -173,30 +175,50 @@ export class SessionDataModel {
   // leaf to the newest descendant of the current one (or the last real entry).
   // Unlike load(), this preserves view state and never resets the target unless
   // it was unset.
+  //
+  // The incoming array is a server *tail window* (large sessions truncate to
+  // the newest N entries / byte budget), while this.entries may hold MORE —
+  // older windows the user fetched via load-earlier. Entries are append-only
+  // and id-stable, so merge instead of replace: keep every existing entry
+  // from before the first one the incoming window covers (the load-earlier
+  // prefix), then take the incoming window verbatim. A wholesale replace here
+  // used to be guarded by `incoming.length < existing.length → skip`, which
+  // silently dropped every live update once load-earlier had grown the model
+  // past the server window.
   reconcile(entries) {
-    if (!Array.isArray(entries)) return;
-    entries = relinkOrphanMetadata(entries);
-    // Guard against stale reloads: if the incoming entries are fewer than what
-    // we already have, the reload fetched the session before the worker flushed
-    // canonical entries to disk. Skip the replace so optimistic preview entries
-    // and recent canonical entries are preserved until a later reload delivers
-    // the real data (append-only semantics — a session never loses entries).
-    if (entries.length < this.entries.length) return;
-    // Guard against no-op reloads: if the incoming entries are identical to what
-    // we already have (same length, same last entry), the reload fetched stale
-    // data. Skip the splice to prevent a Svelte re-render that would destroy
-    // optimistic preview DOM elements inside #messages.
-    if (
-      entries.length === this.entries.length &&
-      entries.length > 0 &&
-      entries[entries.length - 1]?.id === this.entries[this.entries.length - 1]?.id
-    ) {
+    if (!Array.isArray(entries) || entries.length === 0) return;
+    const existing = this.entries;
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient local lookup, not reactive state
+    const incomingIds = new Set();
+    for (const entry of entries) if (entry?.id) incomingIds.add(entry.id);
+
+    // Load-earlier prefix: existing entries older than the incoming window.
+    const prefix = [];
+    for (const entry of existing) {
+      if (entry?.id && incomingIds.has(entry.id)) break;
+      prefix.push(entry);
+    }
+
+    // Out-of-order fetch guard: two reloads can race, and the older response
+    // may land last. If the incoming window overlaps what we have but does NOT
+    // contain our newest entry, it predates our state — applying it would make
+    // fresh messages vanish until the next reload. Skip it.
+    const lastExistingId = existing[existing.length - 1]?.id;
+    if (lastExistingId && prefix.length < existing.length && !incomingIds.has(lastExistingId)) {
       return;
     }
-    this.entries.splice(0, this.entries.length, ...entries);
+
+    const merged = relinkOrphanMetadata([...prefix, ...entries]);
+    // No-op guard: an identical reload (watcher debounce, done-poll retry)
+    // must not splice — the churn would re-render #messages for nothing.
+    if (merged.length === existing.length && merged[merged.length - 1]?.id === lastExistingId) {
+      return;
+    }
+    this.entries.splice(0, this.entries.length, ...merged);
     const lk = buildSessionLookups(this.entries);
     refillMap(this.byId, lk.byId);
     refillMap(this.toolCallMap, lk.toolCallMap);
+    refillMap(this.toolResultMap, lk.toolResultMap);
     refillMap(this.labelMap, lk.labelMap);
 
     const nodeMap = buildTreeNodeMap(buildTree(this.entries, this.labelMap));
