@@ -75,7 +75,7 @@
   }
 
   function formatSessionCount(n) {
-    return n === 1 ? '1 session' : `${n} sessions`;
+    return n === 1 ? t('index.sessionCountOne') : t('project.sessionCount', { count: n });
   }
 </script>
 
