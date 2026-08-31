@@ -259,9 +259,14 @@ function handlePrompt(cmd) {
 
   if (delay > 0) {
     activeSlowRun = true;
+    // Real pi appends the user message as soon as the turn starts (the file
+    // write is what lights the server's running indicator via the watcher);
+    // only the assistant reply waits for the slow window.
+    const user = sessionPath ? messageEntry("user", userText, lastEntryId()) : null;
+    if (user) appendEntry(user.entry);
     send({ type: "message_update", assistantMessageEvent: { type: "text_delta", text: "working…" } });
     setTimeout(() => {
-      writeTurn(userText, reply);
+      if (user) appendEntry(messageEntry("assistant", reply, user.id).entry);
       send({ type: "message_end" });
       send({ type: "turn_end" });
       send({ type: "agent_end" });

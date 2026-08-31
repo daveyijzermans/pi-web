@@ -180,7 +180,7 @@ test.describe("directory chooser", () => {
 
     // Take screenshot: session overview
     await page.screenshot({
-      path: "e2e/.shots/directory-chooser-01-overview.png",
+      path: ".shots/directory-chooser-01-overview.png",
     });
 
     // Click new session
@@ -197,7 +197,7 @@ test.describe("directory chooser", () => {
 
     // Take screenshot: directory browser open
     await page.screenshot({
-      path: "e2e/.shots/directory-chooser-02-browser-open.png",
+      path: ".shots/directory-chooser-02-browser-open.png",
     });
 
     // Verify browser is visible
@@ -209,7 +209,7 @@ test.describe("directory chooser", () => {
 
     // Take screenshot: entry selected
     await page.screenshot({
-      path: "e2e/.shots/directory-chooser-03-entry-selected.png",
+      path: ".shots/directory-chooser-03-entry-selected.png",
     });
 
     // Verify path display shows selected path
@@ -223,7 +223,7 @@ test.describe("directory chooser", () => {
 
     // Take screenshot: new session loaded
     await page.screenshot({
-      path: "e2e/.shots/directory-chooser-04-session-loaded.png",
+      path: ".shots/directory-chooser-04-session-loaded.png",
     });
 
     // Verify session page elements are visible
@@ -320,7 +320,7 @@ test.describe("directory chooser", () => {
 
     // Take screenshot: composer ready
     await page.screenshot({
-      path: "e2e/.shots/directory-chooser-05-composer-ready.png",
+      path: ".shots/directory-chooser-05-composer-ready.png",
     });
 
     // Type a message
@@ -328,7 +328,7 @@ test.describe("directory chooser", () => {
 
     // Take screenshot: message typed
     await page.screenshot({
-      path: "e2e/.shots/directory-chooser-06-message-typed.png",
+      path: ".shots/directory-chooser-06-message-typed.png",
     });
 
     // Verify message is in the textarea

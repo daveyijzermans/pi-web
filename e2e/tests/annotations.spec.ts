@@ -1,21 +1,10 @@
-import { test, expect } from "../lib/test";
+import { test, expect, waitSessionReady } from "../lib/test";
 import {
   buildSession,
   realWorkingDir,
   uniqueSessionName,
   writeSession,
 } from "../lib/sessions";
-
-// The SPA renders the session view asynchronously. Wait until runSessionApp has
-// run — a populated tree means #messages is fully rendered and the sidebar
-// collapse state has settled — before reading body classes or walking the DOM.
-// Use `attached` (not `visible`): on mobile the tree sidebar is hidden.
-async function waitSessionReady(page: import("@playwright/test").Page) {
-  await page
-    .locator("#tree-container .tree-node")
-    .first()
-    .waitFor({ state: "attached" });
-}
 
 async function openRightSidebar(page: import("@playwright/test").Page) {
   await waitSessionReady(page);

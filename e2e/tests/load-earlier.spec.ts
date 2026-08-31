@@ -1,5 +1,5 @@
 import { test, expect, collapseScratchpad } from "../lib/test";
-import { uniqueSessionName, writeSession } from "../lib/sessions";
+import { appendEntry, uniqueSessionName, writeSession } from "../lib/sessions";
 
 // Build a session large enough to cross the server-side truncation threshold.
 // The e2e server lowers that threshold via env vars (lib/server.ts:
@@ -107,5 +107,28 @@ test.describe("load-earlier banner (large session pagination)", () => {
     await expect(page.locator("#messages")).toContainText(EARLY_MARKER, {
       timeout: WINDOW_TIMEOUT,
     });
+
+    // Live updates must keep flowing AFTER load-earlier: the model now holds
+    // more entries than the server tail window, and the old wholesale-replace
+    // guard silently dropped every reload in that state. Append a new entry to
+    // the session file (watcher → reload → reconcile) and assert it renders
+    // while the loaded-earlier history stays put.
+    const LIVE_MARKER = "LIVE_AFTER_LOAD_EARLIER";
+    const lastId = `m${String(MESSAGE_COUNT - 1).padStart(6, "0")}`;
+    appendEntry(sessionsDir, name, {
+      type: "message",
+      id: "live-after",
+      parentId: lastId,
+      timestamp: new Date().toISOString(),
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: LIVE_MARKER }],
+        timestamp: Date.now(),
+      },
+    });
+    await expect(page.locator("#messages")).toContainText(LIVE_MARKER, {
+      timeout: WINDOW_TIMEOUT,
+    });
+    await expect(page.locator("#messages")).toContainText(EARLY_MARKER);
   });
 });

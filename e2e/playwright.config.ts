@@ -5,6 +5,11 @@ const isCI = !!process.env.CI;
 export default defineConfig({
   testDir: "./tests",
   testIgnore: "**/*.real.spec.ts",
+  // @screenshots specs overwrite committed docs/screenshots assets — they are
+  // capture tools, not tests, and a plain run must never touch tracked
+  // binaries. Opt in with:
+  //   E2E_SCREENSHOTS=1 npx playwright test --grep @screenshots
+  grepInvert: process.env.E2E_SCREENSHOTS ? undefined : /@screenshots/,
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,

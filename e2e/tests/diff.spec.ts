@@ -1,4 +1,4 @@
-import { test, expect } from "../lib/test";
+import { test, expect, waitSessionReady } from "../lib/test";
 import {
   buildSession,
   realWorkingDir,
@@ -52,13 +52,6 @@ function gitRepoWithBlockChange(): string {
   git("commit", "-q", "-m", "add block");
   writeFileSync(join(dir, "block.txt"), "a\nB2\nC3\nD4\ne\nf\n");
   return dir;
-}
-
-async function waitSessionReady(page: Page) {
-  await page
-    .locator("#tree-container .tree-node")
-    .first()
-    .waitFor({ state: "attached" });
 }
 
 async function openDiffModal(page: Page) {

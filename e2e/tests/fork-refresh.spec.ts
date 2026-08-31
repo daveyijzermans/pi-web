@@ -1,4 +1,4 @@
-import { test, expect, collapseScratchpad } from "../lib/test";
+import { test, expect, collapseScratchpad, openSessionOutline } from "../lib/test";
 import { uniqueSessionName, writeSession } from "../lib/sessions";
 
 // Reproduces a user-reported bug: after refreshing a *forked* chat, the
@@ -77,6 +77,8 @@ test.describe("forked chat refresh", () => {
     await page.reload();
 
     // The side-nav tree lists every entry — both the older and newer messages.
+    // The tree renders lazily on the sidebar's "Session" tab; activate it first.
+    await openSessionOutline(page);
     const tree = page.locator("#tree-container");
     await expect(tree).toContainText(PRE_FORK_MARKER);
     await expect(tree).toContainText(POST_FORK_MARKER);

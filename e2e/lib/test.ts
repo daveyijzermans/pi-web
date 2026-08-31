@@ -66,12 +66,27 @@ export async function collapseScratchpad(
   });
 }
 
+/**
+ * Wait until the session SPA has rendered the conversation. The sidebar tree
+ * is no longer a valid readiness signal — it renders lazily, only while the
+ * sidebar's "Session" tab is active — so wait for a message entry instead.
+ * `attached` (not `visible`) so it also works where containers are hidden.
+ */
+export async function waitSessionReady(
+  page: import("@playwright/test").Page,
+): Promise<void> {
+  await page
+    .locator('#messages [id^="entry-"]')
+    .first()
+    .waitFor({ state: "attached" });
+}
+
 export async function openSessionOutline(
   page: import("@playwright/test").Page,
 ): Promise<void> {
-  const outlineTab = page.locator(
-    '[role="tab"][aria-controls="sidebar-outline-panel"]',
-  );
+  // The session outline lives on the sidebar's "Session" tab (the fork's
+  // Sessions/Session/Files tab bar replaced the aria-controls panels).
+  const outlineTab = page.locator('#sidebar [role="tab"][data-tab="session"]');
   await outlineTab.dispatchEvent("click");
   await expect(outlineTab).toHaveAttribute("aria-selected", "true");
 }

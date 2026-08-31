@@ -50,11 +50,11 @@ test.describe("benchmark session rendering", () => {
     });
 
     // ---- Assert tool call rendered ----
-    // Tool calls render as .tool-chip buttons inside .assistant-group
-    // (SessionEntry.svelte → ToolChip.svelte)
-    const toolChips = page.locator(".tool-chip");
-    await expect(toolChips.first()).toBeVisible({ timeout: WINDOW_TIMEOUT });
-    expect(await toolChips.count()).toBeGreaterThan(0);
+    // Tool calls render inline as .tool-execution blocks (SessionEntry.svelte
+    // → ToolCall.svelte; the chip/bottom-sheet UI was removed).
+    const toolCalls = page.locator(".tool-execution");
+    await expect(toolCalls.first()).toBeVisible({ timeout: WINDOW_TIMEOUT });
+    expect(await toolCalls.count()).toBeGreaterThan(0);
 
     // Assert the tool call marker text is present
     await expect(page.locator("#messages")).toContainText("BENCH_TOOLCALL_MARKER", {
@@ -62,12 +62,8 @@ test.describe("benchmark session rendering", () => {
     });
 
     // ---- Assert thinking block rendered ----
-    // Thinking blocks appear inside tool chips as "Thought" in the chip summary
-    // (tool-summary.js chipSummaryText pushes "Thought" when chip.thinking exists)
-    // When a chip has thinking, clicking it opens ToolDetail.svelte which shows
-    // a <details> with class "tool-sheet-thinking" inside the sheet body.
-    // We assert the "Thought" text appears in the chip summary.
-    await expect(page.locator("#messages")).toContainText("Thought", {
+    // Thinking renders inline as a .thinking-block with .thinking-text.
+    await expect(page.locator(".thinking-block .thinking-text").first()).toBeAttached({
       timeout: WINDOW_TIMEOUT,
     });
 

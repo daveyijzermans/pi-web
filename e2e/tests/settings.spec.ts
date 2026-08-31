@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect } from "../lib/test";
 import { STATE_FILE, type ServerState } from "../lib/paths";
+import { buildSession, uniqueSessionName, writeSession } from "../lib/sessions";
 
 function writeCustomThemeFixture() {
   const state = JSON.parse(readFileSync(STATE_FILE, "utf8")) as ServerState;
@@ -293,28 +294,50 @@ test.describe("settings page", () => {
       await openSection(page, "sessionDisplay");
       await expect(page.locator(thinkingInput)).not.toBeChecked();
 
-      // Open the demo session and assert the header toggle reflects the new
-      // default. aria-pressed is set by syncToggleButtons during
-      // attachHeaderHandlers, so it captures the state loadToggleState
-      // computed.
+      // Open the demo session and assert the rendered effect: with the default
+      // off, thinking text is hidden and its collapsed placeholder shows. (The
+      // header T/O/P buttons were removed; keyboard shortcuts + settings
+      // defaults are the surviving surface, so assert the applied state.)
       await page.goto("/");
       await page
         .locator(".session-card", { hasText: "add deepseek-v4-pro" })
         .click();
       await expect(page).toHaveURL(/\/session\?id=/);
-      await expect(
-        page.locator('[data-action="toggle-thinking"]'),
-      ).toHaveAttribute("aria-pressed", "false");
+      await expect(page.locator(".thinking-text").first()).toBeHidden();
+      await expect(page.locator(".thinking-collapsed").first()).toBeVisible();
     });
 
-    // Per-session override (issue #48 follow-up): when the user toggles a
-    // header button inside a session, the override is scoped to that session.
-    // Other sessions still follow the configured /settings default. Regression
-    // guard for the bug where a single global blob shadowed the setting across
-    // every session.
-    test("in-session header toggle override is scoped to that session", async ({
+    // Per-session override (issue #48 follow-up): when the user toggles
+    // thinking inside a session (keyboard 'T'), the override is scoped to that
+    // session. Other sessions still follow the configured /settings default.
+    // Regression guard for the bug where a single global blob shadowed the
+    // setting across every session.
+    test("in-session toggle override is scoped to that session", async ({
       page,
-    }) => {
+      sessionsDir,
+    }, testInfo) => {
+      // A second session WITH a thinking block (the notes fixture has none),
+      // so the "other sessions follow the default" leg has something to probe.
+      const { entries, lastId } = buildSession();
+      entries.push({
+        type: "message",
+        id: "think-a",
+        parentId: lastId,
+        timestamp: new Date().toISOString(),
+        message: {
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: "OTHER_SESSION_THINKING" },
+            { type: "text", text: "other reply" },
+          ],
+          timestamp: Date.now(),
+        },
+      });
+      const otherId = writeSession(
+        sessionsDir,
+        uniqueSessionName(testInfo, "toggle-other"),
+        entries,
+      );
       // Clean any blob a previous test in this group might have left on this
       // browser context. The beforeEach has reset server-side defaults.
       await page.goto("/");
@@ -322,7 +345,7 @@ test.describe("settings page", () => {
         window.localStorage.removeItem("pi.sessionDetail.toggleState"),
       );
 
-      // Open the demo session and toggle thinking off via the header button —
+      // Open the demo session and toggle thinking off via the keyboard —
       // this is the "in-session override" the bug used to leak to every other
       // session.
       await page
@@ -330,31 +353,19 @@ test.describe("settings page", () => {
         .click();
       await expect(page).toHaveURL(/\/session\?id=/);
       const demoUrl = page.url();
-      await expect(
-        page.locator('[data-action="toggle-thinking"]'),
-      ).toHaveAttribute("aria-pressed", "true");
-      await page.locator('[data-action="toggle-thinking"]').click();
-      await expect(
-        page.locator('[data-action="toggle-thinking"]'),
-      ).toHaveAttribute("aria-pressed", "false");
+      await expect(page.locator(".thinking-text").first()).toBeVisible();
+      await page.keyboard.press("t");
+      await expect(page.locator(".thinking-text").first()).toBeHidden();
 
       // Navigate to a different session; the configured default (thinking on)
       // must apply — the demo override must not leak.
-      await page.goto("/");
-      await page
-        .locator(".session-card", { hasText: "Fix the failing unit test" })
-        .click();
-      await expect(page).toHaveURL(/\/session\?id=/);
-      await expect(
-        page.locator('[data-action="toggle-thinking"]'),
-      ).toHaveAttribute("aria-pressed", "true");
+      await page.goto(`/session?id=${encodeURIComponent(otherId)}`);
+      await expect(page.locator(".thinking-text").first()).toBeVisible();
 
       // Re-open the demo session; the per-session override must still apply
       // there (the blob remembers it specifically for that session id).
       await page.goto(demoUrl);
-      await expect(
-        page.locator('[data-action="toggle-thinking"]'),
-      ).toHaveAttribute("aria-pressed", "false");
+      await expect(page.locator(".thinking-text").first()).toBeHidden();
     });
 
     // Migration: a pre-existing flat-state blob (one shared override for every
@@ -384,15 +395,9 @@ test.describe("settings page", () => {
 
       // The configured defaults (thinking on, tools on, tool outputs off) must
       // win — the flat blob is treated as no overrides.
-      await expect(
-        page.locator('[data-action="toggle-thinking"]'),
-      ).toHaveAttribute("aria-pressed", "true");
-      await expect(
-        page.locator('[data-action="toggle-tools"]'),
-      ).toHaveAttribute("aria-pressed", "true");
-      await expect(
-        page.locator('[data-action="toggle-tool-output"]'),
-      ).toHaveAttribute("aria-pressed", "false");
+      await expect(page.locator(".thinking-text").first()).toBeVisible();
+      await expect(page.locator(".tool-execution").first()).toBeVisible();
+      await expect(page.locator(".tool-output.expandable.expanded")).toHaveCount(0);
     });
 
     // Cold-cache first paint: before this fix, the toggle controller was
@@ -421,37 +426,20 @@ test.describe("settings page", () => {
         .click();
       await expect(page).toHaveURL(/\/session\?id=/);
 
-      // Without reload-after-hydrate, this stayed at "true" indefinitely because
-      // the controller was constructed before localStorage was populated.
-      await expect(
-        page.locator('[data-action="toggle-thinking"]'),
-      ).toHaveAttribute("aria-pressed", "false");
+      // Without reload-after-hydrate, thinking stayed visible indefinitely
+      // because the controller was constructed before localStorage was
+      // populated.
+      await expect(page.locator(".thinking-text").first()).toBeHidden();
     });
 
-    // Gating: while tool calls are hidden, the "Tool output" header button and
-    // its matching settings toggle have no visible effect, so both must
-    // surface as disabled. The state itself is preserved so re-enabling tools
-    // restores the prior tool-output choice.
+    // Gating: while tool calls are hidden, the tool-output setting has no
+    // visible effect, so the settings input must surface as disabled. (The
+    // header buttons were removed; the keyboard shortcut's no-op gating lives
+    // in createToggleController and is unit-tested.)
     test("tool-output toggle is disabled while tools are hidden", async ({
       page,
     }) => {
-      // Session header: open demo, hide tools, assert the Tool output button is
-      // disabled; show tools again, assert it's re-enabled.
-      await page.goto("/");
-      await page
-        .locator(".session-card", { hasText: "add deepseek-v4-pro" })
-        .click();
-      await expect(page).toHaveURL(/\/session\?id=/);
-      const toolOutputBtn = page.locator(
-        '[data-action="toggle-tool-output"]',
-      );
-      await expect(toolOutputBtn).toBeEnabled();
-      await page.locator('[data-action="toggle-tools"]').click();
-      await expect(toolOutputBtn).toBeDisabled();
-      await page.locator('[data-action="toggle-tools"]').click();
-      await expect(toolOutputBtn).toBeEnabled();
-
-      // Settings page: same gating on the "Expand tool outputs by default"
+      // Settings page: gating on the "Expand tool outputs by default"
       // input — disabled when "Show tool calls by default" is off.
       await page.goto("/settings");
       await openSection(page, "sessionDisplay");
@@ -487,17 +475,14 @@ test.describe("settings page", () => {
       await expect(page).toHaveURL(/\/session\?id=/);
 
       // Default state: tools visible, placeholder hidden.
-      await expect(
-        page.locator('[data-action="toggle-tools"]'),
-      ).toHaveAttribute("aria-pressed", "true");
       const placeholders = page.locator(".tool-call-collapsed");
       await expect(placeholders.first()).toBeAttached();
       await expect(placeholders.first()).toBeHidden();
       await expect(page.locator(".tool-execution").first()).toBeVisible();
 
-      // Toggle tools off and assert the swap — placeholder becomes visible,
-      // tool-execution is hidden.
-      await page.locator('[data-action="toggle-tools"]').click();
+      // Toggle tools off (keyboard 'O') and assert the swap — placeholder
+      // becomes visible, tool-execution is hidden.
+      await page.keyboard.press("o");
       await expect(placeholders.first()).toBeVisible();
       await expect(placeholders.first()).toContainText(/^Tool: \S+ \.\.\./);
       await expect(page.locator(".tool-execution").first()).toBeHidden();
