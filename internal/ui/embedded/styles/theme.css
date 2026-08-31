@@ -10,6 +10,24 @@
     animation-duration: 0.12s;
 }
 
+/* Anchor rem to the interface font size so every rem-based font-size and
+   line-height in the page CSS scales with the setting. The default (12px)
+   keeps all metrics pixel-identical to the pre-rem stylesheets. */
+html {
+    font-size: var(--font-size-ui, 12px);
+}
+
+/* Form controls do NOT inherit fonts by default (browsers use a fixed system
+   font for them) — without this, buttons/inputs/selects ignore the interface
+   font and size entirely. Rules that set an explicit size still win. */
+button,
+input,
+select,
+textarea {
+    font-family: inherit;
+    font-size: inherit;
+}
+
 :root {
     --font-sans: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
     /* Font for rendered message content; falls back to the interface font and
@@ -23,6 +41,8 @@
        style and live by the settings page). */
     --font-size-ui: 12px;
     --font-content-size: 13px;
+    /* Code/tool/thinking surfaces — independent of the interface size. */
+    --font-code-size: 12px;
     --palette-surface: var(--surface);
     --palette-surface-2: var(--surface-2);
     --palette-text-soft: var(--text-soft);

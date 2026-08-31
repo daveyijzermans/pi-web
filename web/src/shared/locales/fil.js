@@ -397,6 +397,8 @@ export default {
   'settings.interfaceFontSizeHint': 'Laki ng teksto ng app UI (px).',
   'settings.contentFontSize': 'Laki ng font ng nilalaman',
   'settings.contentFontSizeHint': 'Laki ng naka-render na teksto ng mensahe (px).',
+  'settings.codeFontSize': 'Laki ng font ng code',
+  'settings.codeFontSizeHint': 'Laki ng code, output ng tool at thinking text (px).',
   'settings.fontBuiltIn': 'Built-in',
   'settings.fontInstalled': 'Installed',
   'settings.fontDetectUnsupported':

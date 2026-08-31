@@ -395,6 +395,8 @@ export default {
   'settings.interfaceFontSizeHint': 'Size of the app UI text (px).',
   'settings.contentFontSize': 'Content font size',
   'settings.contentFontSizeHint': 'Size of rendered message text (px).',
+  'settings.codeFontSize': 'Code font size',
+  'settings.codeFontSizeHint': 'Size of code, tool output and thinking text (px).',
   'settings.fontBuiltIn': 'Built-in',
   'settings.fontInstalled': 'Installed',
   'settings.fontDetectUnsupported':

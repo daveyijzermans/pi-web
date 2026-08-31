@@ -396,6 +396,8 @@ export default {
   'settings.interfaceFontSizeHint': 'アプリ UI テキストのサイズ（px）。',
   'settings.contentFontSize': 'コンテンツの文字サイズ',
   'settings.contentFontSizeHint': 'レンダリングされたメッセージテキストのサイズ（px）。',
+  'settings.codeFontSize': 'コードのフォントサイズ',
+  'settings.codeFontSizeHint': 'コード、ツール出力、思考テキストのサイズ（px）。',
   'settings.fontBuiltIn': '組み込み',
   'settings.fontInstalled': 'インストール済み',
   'settings.fontDetectUnsupported':

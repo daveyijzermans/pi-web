@@ -394,6 +394,8 @@ export default {
   'settings.interfaceFontSizeHint': 'Ukuran teks antarmuka aplikasi (px).',
   'settings.contentFontSize': 'Ukuran font konten',
   'settings.contentFontSizeHint': 'Ukuran teks pesan yang ditampilkan (px).',
+  'settings.codeFontSize': 'Ukuran font kode',
+  'settings.codeFontSizeHint': 'Ukuran teks kode, keluaran alat, dan pemikiran (px).',
   'settings.fontBuiltIn': 'Bawaan',
   'settings.fontInstalled': 'Installed',
   'settings.fontDetectUnsupported':

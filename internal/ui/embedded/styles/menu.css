@@ -69,7 +69,7 @@
     gap: 8px;
     padding: 8px 10px;
     text-align: left;
-    font-size: 13px;
+    font-size: calc(13rem / 12);
     font-family: inherit;
     border-radius: 6px;
     transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
@@ -121,7 +121,7 @@
 
 #index-notify-status.on {
     margin-left: auto;
-    font-size: 10px;
+    font-size: calc(10rem / 12);
     padding: 0;
     background: transparent;
     color: var(--pi-menu-muted-color);
@@ -132,7 +132,7 @@
 .command-menu-item kbd,
 .mobile-command-item kbd {
     margin-left: auto;
-    font-size: 10px;
+    font-size: calc(10rem / 12);
     color: var(--pi-menu-muted-color);
     font-family: inherit;
     flex-shrink: 0;
@@ -231,7 +231,7 @@
     .mobile-command-section-title,
     .web-menu-section-title {
         display: block !important;
-        font-size: 11px !important;
+        font-size: calc(11rem / 12) !important;
         font-weight: 700 !important;
         text-transform: uppercase !important;
         letter-spacing: 0.08em !important;
@@ -248,7 +248,7 @@
         align-items: center !important;
         justify-content: space-between !important;
         padding: 12px 14px !important;
-        font-size: 14px !important;
+        font-size: calc(14rem / 12) !important;
         border-radius: 8px !important;
         background: var(--surface-2) !important;
         color: var(--text) !important;
@@ -288,7 +288,7 @@
     color: var(--pi-menu-item-color, #b7bbc4);
     border: 1px solid var(--pi-menu-border, #292a33);
     border-radius: 4px;
-    font-size: 11px;
+    font-size: calc(11rem / 12);
     font-weight: 500;
     padding: 2px 20px 2px 8px;
     margin-left: 8px;
@@ -319,7 +319,7 @@
 
 @media (max-width: 900px) {
     .sound-selector {
-        font-size: 13px;
+        font-size: calc(13rem / 12);
         padding: 4px 24px 4px 10px;
         background-color: var(--surface-2, #191920) !important;
         border: 1px solid var(--pi-menu-border, #292a33) !important;
@@ -335,7 +335,7 @@
 /* ── Version row status + update badge ─────────────────────────────────── */
 .version-status {
     margin-left: auto;
-    font-size: 10px;
+    font-size: calc(10rem / 12);
     color: var(--pi-menu-muted-color, var(--muted));
     flex-shrink: 0;
     white-space: nowrap;
@@ -360,7 +360,7 @@
 
 @media (max-width: 900px) {
     .version-status {
-        font-size: 13px !important;
+        font-size: calc(13rem / 12) !important;
         color: var(--muted) !important;
     }
     .version-status.has-update {
@@ -419,12 +419,12 @@
 
 .version-modal-title {
     font-weight: 700;
-    font-size: 14px;
+    font-size: calc(14rem / 12);
     color: var(--text, #e6e7eb);
 }
 
 .version-modal-current {
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     color: var(--muted, #858a96);
 }
 
@@ -433,7 +433,7 @@
     border: 0;
     background: transparent;
     color: var(--muted, #858a96);
-    font-size: 20px;
+    font-size: calc(20rem / 12);
     line-height: 1;
     cursor: pointer;
     padding: 0 4px;
@@ -444,13 +444,13 @@
 .version-modal-body {
     padding: 16px;
     overflow-y: auto;
-    font-size: 13px;
+    font-size: calc(13rem / 12);
     color: var(--text, #e6e7eb);
     line-height: 1.5;
 }
 
 .version-modal-lead { margin: 0 0 12px; }
-.version-modal-notes { margin: 10px 0 0; font-size: 12px; color: var(--muted, #858a96); }
+.version-modal-notes { margin: 10px 0 0; font-size: calc(12rem / 12); color: var(--muted, #858a96); }
 .version-modal-notes a,
 .version-changelog a { color: var(--accent, #9cc7c0); }
 
@@ -464,14 +464,14 @@
     overflow-y: auto;
 }
 
-.version-changelog h4 { margin: 12px 0 6px; font-size: 13px; }
+.version-changelog h4 { margin: 12px 0 6px; font-size: calc(13rem / 12); }
 .version-changelog h4:first-child { margin-top: 0; }
 .version-changelog p { margin: 6px 0; }
 .version-changelog ul { margin: 6px 0; padding-left: 18px; }
 .version-changelog li { margin: 3px 0; }
 .version-changelog code {
     font-family: var(--font-code);
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     padding: 1px 4px;
     background: rgba(127, 127, 127, 0.18);
     border-radius: 4px;
@@ -480,7 +480,7 @@
 
 .version-modal-status {
     padding: 0 16px 4px;
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     color: var(--muted, #858a96);
     opacity: 0;
     transition: opacity 0.2s ease;
@@ -499,7 +499,7 @@
 
 .version-modal-btn {
     font-family: inherit;
-    font-size: 13px;
+    font-size: calc(13rem / 12);
     padding: 8px 14px;
     border-radius: 8px;
     cursor: pointer;
@@ -527,8 +527,8 @@
 }
 .version-modal-btn.is-loading::before {
     content: "";
-    width: 12px;
-    height: 12px;
+    width: calc(12rem / 12);
+    height: calc(12rem / 12);
     border-radius: 50%;
     border: 2px solid currentColor;
     border-top-color: transparent;

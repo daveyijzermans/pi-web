@@ -393,6 +393,8 @@ export default {
   'settings.interfaceFontSizeHint': 'Saiz teks antara muka aplikasi (px).',
   'settings.contentFontSize': 'Saiz fon kandungan',
   'settings.contentFontSizeHint': 'Saiz teks mesej yang dipaparkan (px).',
+  'settings.codeFontSize': 'Saiz fon kod',
+  'settings.codeFontSizeHint': 'Saiz kod, output alat dan teks pemikiran (px).',
   'settings.fontBuiltIn': 'Terbina dalam',
   'settings.fontInstalled': 'Installed',
   'settings.fontDetectUnsupported':

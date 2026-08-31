@@ -13,9 +13,11 @@
   const BUILTIN_FONTS = ['mono', 'system', 'sans', 'serif'];
   const uiSizeKey = 'pi-web:v1:font-ui-size';
   const contentSizeKey = 'pi-web:v1:font-content-size';
+  const codeSizeKey = 'pi-web:v1:font-code-size';
   let theme = $derived(valueFor(settings, 'pi-web-theme', 'dark'));
   let uiSize = $derived(valueFor(settings, uiSizeKey, '14'));
   let contentSize = $derived(valueFor(settings, contentSizeKey, '15'));
+  let codeSize = $derived(valueFor(settings, codeSizeKey, '12'));
   let detectedFonts = $state([]);
   // User explicitly picked "Custom…" for a kind, so the text field shows even
   // before a family is committed (auto-detected custom families don't need it).
@@ -54,9 +56,16 @@
   }
 
   function commitSize(kind, value) {
-    const key = kind === 'ui' ? uiSizeKey : contentSizeKey;
+    const key = kind === 'ui' ? uiSizeKey : kind === 'code' ? codeSizeKey : contentSizeKey;
     onSave(key, value);
-    applyFonts(document, kind === 'ui' ? { uiSize: value } : { contentSize: value });
+    applyFonts(
+      document,
+      kind === 'ui'
+        ? { uiSize: value }
+        : kind === 'code'
+          ? { codeSize: value }
+          : { contentSize: value },
+    );
   }
 
   function commitFont(kind, value) {
@@ -199,6 +208,24 @@
             data-setting={contentSizeKey}
             value={contentSize}
             onchange={(e) => commitSize('content', e.currentTarget.value)}
+          />
+        </div>
+      </div>
+    {:else if item.kind === 'code'}
+      <div class="settings-row">
+        <div class="settings-row-label">
+          <span class="name">{t('settings.codeFontSize')}</span><span class="hint"
+            >{t('settings.codeFontSizeHint')}</span
+          >
+        </div>
+        <div class="settings-control">
+          <input
+            type="number"
+            min="8"
+            max="32"
+            data-setting={codeSizeKey}
+            value={codeSize}
+            onchange={(e) => commitSize('code', e.currentTarget.value)}
           />
         </div>
       </div>

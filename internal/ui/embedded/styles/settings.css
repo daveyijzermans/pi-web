@@ -1,5 +1,5 @@
 .settings-page {
-  padding: calc(52px + env(safe-area-inset-top)) 0 0 240px;
+  padding: calc(var(--session-header-h, calc(52rem / 12)) + env(safe-area-inset-top)) 0 0 240px;
   /* Base the page on the interface font size so it reflects the setting and
      previews changes live (child text sizes are em-relative to this). */
   font-size: var(--font-size-ui);
@@ -7,7 +7,7 @@
 
 .settings-sidebar {
   position: fixed;
-  top: calc(52px + env(safe-area-inset-top));
+  top: calc(var(--session-header-h, calc(52rem / 12)) + env(safe-area-inset-top));
   left: 0;
   bottom: 0;
   width: 240px;
@@ -68,7 +68,7 @@
 
 @media (max-width: 760px) {
   .settings-page {
-    padding: calc(52px + env(safe-area-inset-top)) 0 0;
+    padding: calc(var(--session-header-h, calc(52rem / 12)) + env(safe-area-inset-top)) 0 0;
   }
   .settings-sidebar {
     position: static;
@@ -174,7 +174,7 @@
 }
 
 .settings-control input[type="text"] {
-  width: 220px;
+  width: calc(220rem / 12);
 }
 
 .settings-font-control {
@@ -188,8 +188,8 @@
 .settings-toggle {
   position: relative;
   display: inline-block;
-  width: 44px;
-  height: 24px;
+  width: calc(44rem / 12);
+  height: calc(24rem / 12);
   flex: none;
 }
 
@@ -212,8 +212,8 @@
 .settings-toggle .slider::before {
   content: "";
   position: absolute;
-  height: 16px;
-  width: 16px;
+  height: calc(16rem / 12);
+  width: calc(16rem / 12);
   left: 3px;
   top: 3px;
   background: var(--text-soft);

@@ -392,6 +392,8 @@ export default {
   'settings.interfaceFontSizeHint': 'Cỡ chữ giao diện ứng dụng (px).',
   'settings.contentFontSize': 'Cỡ phông nội dung',
   'settings.contentFontSizeHint': 'Cỡ chữ tin nhắn hiển thị (px).',
+  'settings.codeFontSize': 'Cỡ chữ mã',
+  'settings.codeFontSizeHint': 'Cỡ chữ của mã, kết quả công cụ và văn bản suy nghĩ (px).',
   'settings.fontBuiltIn': 'Tích hợp',
   'settings.fontInstalled': 'Installed',
   'settings.fontDetectUnsupported':

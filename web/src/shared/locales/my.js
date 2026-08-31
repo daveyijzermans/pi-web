@@ -398,6 +398,8 @@ export default {
   'settings.interfaceFontSizeHint': 'အက်ပ် UI စာသား အရွယ် (px)။',
   'settings.contentFontSize': 'အကြောင်းအရာ ဖောင့်အရွယ်',
   'settings.contentFontSizeHint': 'ပြသထားသော မက်ဆေ့ချ်စာသား အရွယ် (px)။',
+  'settings.codeFontSize': 'ကုဒ်ဖောင့်အရွယ်အစား',
+  'settings.codeFontSizeHint': 'ကုဒ်၊ ကိရိယာထွက်ရလဒ်နှင့် စဉ်းစားနေသည့်စာသား၏ အရွယ်အစား (px)။',
   'settings.fontBuiltIn': 'အတွင်းပါ',
   'settings.fontInstalled': 'Installed',
   'settings.fontDetectUnsupported':

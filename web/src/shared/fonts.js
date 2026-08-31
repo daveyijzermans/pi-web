@@ -15,6 +15,7 @@ export const FONT_CONTENT_KEY = 'pi-web:v1:font-content';
 export const FONT_CODE_KEY = 'pi-web:v1:font-code';
 export const FONT_UI_SIZE_KEY = 'pi-web:v1:font-ui-size';
 export const FONT_CONTENT_SIZE_KEY = 'pi-web:v1:font-content-size';
+export const FONT_CODE_SIZE_KEY = 'pi-web:v1:font-code-size';
 
 export const FONT_MIN_SIZE = 8;
 export const FONT_MAX_SIZE = 32;
@@ -52,7 +53,10 @@ export function clampSize(value, fallback = 12) {
  * (inline element-level styles win over any stylesheet rule). Any field may be
  * omitted.
  */
-export function applyFonts(documentImpl, { ui, content, code, uiSize, contentSize } = {}) {
+export function applyFonts(
+  documentImpl,
+  { ui, content, code, uiSize, contentSize, codeSize } = {},
+) {
   const root = documentImpl?.documentElement;
   if (!root || !root.style) return;
   if (ui) root.style.setProperty('--font-sans', resolveFontStack(ui));
@@ -62,4 +66,6 @@ export function applyFonts(documentImpl, { ui, content, code, uiSize, contentSiz
     root.style.setProperty('--font-size-ui', `${clampSize(uiSize)}px`);
   if (contentSize != null && contentSize !== '')
     root.style.setProperty('--font-content-size', `${clampSize(contentSize)}px`);
+  if (codeSize != null && codeSize !== '')
+    root.style.setProperty('--font-code-size', `${clampSize(codeSize)}px`);
 }

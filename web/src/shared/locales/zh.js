@@ -391,6 +391,8 @@ export default {
   'settings.interfaceFontSizeHint': '应用界面文字的大小（px）。',
   'settings.contentFontSize': '内容字号',
   'settings.contentFontSizeHint': '渲染消息文字的大小（px）。',
+  'settings.codeFontSize': '代码字体大小',
+  'settings.codeFontSizeHint': '代码、工具输出和思考文本的大小（像素）。',
   'settings.fontBuiltIn': '内置',
   'settings.fontInstalled': '已安装',
   'settings.fontDetectUnsupported': '此浏览器无法列出已安装字体。请使用自定义…输入字体名称。',

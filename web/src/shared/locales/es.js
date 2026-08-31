@@ -398,6 +398,9 @@ export default {
   'settings.interfaceFontSizeHint': 'Tamaño del texto de la interfaz (px).',
   'settings.contentFontSize': 'Tamaño de fuente del contenido',
   'settings.contentFontSizeHint': 'Tamaño del texto de los mensajes (px).',
+  'settings.codeFontSize': 'Tamaño de fuente del código',
+  'settings.codeFontSizeHint':
+    'Tamaño del código, la salida de herramientas y el texto de razonamiento (px).',
   'settings.fontBuiltIn': 'Integradas',
   'settings.fontInstalled': 'Instaladas',
   'settings.fontDetectUnsupported':

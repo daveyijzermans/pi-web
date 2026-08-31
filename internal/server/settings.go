@@ -49,6 +49,7 @@ var settingDefaults = map[string]string{
 	"pi-web:v1:font-code":           "mono",
 	"pi-web:v1:font-ui-size":        "12",
 	"pi-web:v1:font-content-size":   "13",
+	"pi-web:v1:font-code-size":      "12",
 	"pi-sessions:spinner-style":     "runcat",
 	"pi-share:v1:notify-on-done":    "false",
 	"pi-share:v1:done-sound":        "cat.mp3",
@@ -180,12 +181,13 @@ func sanitizeFontSize(value, fallback string) string {
 // FontStyles returns the resolved interface/content/code font stacks and pixel
 // sizes for server-side injection so the page paints with the chosen
 // fonts/sizes before any JS runs.
-func (s *Server) FontStyles() (uiStack, contentStack, codeStack, uiSize, contentSize string) {
+func (s *Server) FontStyles() (uiStack, contentStack, codeStack, uiSize, contentSize, codeSize string) {
 	uiStack = resolveFontStack(s.getSetting("pi-web:v1:font-ui", "mono"))
 	contentStack = resolveFontStack(s.getSetting("pi-web:v1:font-content", "mono"))
 	codeStack = resolveFontStack(s.getSetting("pi-web:v1:font-code", "mono"))
 	uiSize = sanitizeFontSize(s.getSetting("pi-web:v1:font-ui-size", "12"), "12")
 	contentSize = sanitizeFontSize(s.getSetting("pi-web:v1:font-content-size", "13"), "13")
+	codeSize = sanitizeFontSize(s.getSetting("pi-web:v1:font-code-size", "12"), "12")
 	return
 }
 

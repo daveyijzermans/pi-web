@@ -40,7 +40,7 @@ a { color: inherit; }
     -webkit-backdrop-filter: blur(16px);
 }
 .header-inner {
-    max-width: 1040px;
+    max-width: calc(1040rem / 12);
     margin: 0 auto;
     padding: 16px 28px 18px;
 }
@@ -92,13 +92,13 @@ a { color: inherit; }
     align-items: center;
     gap: 12px;
     color: var(--text);
-    font-size: 16px;
+    font-size: calc(16rem / 12);
     font-weight: 650;
     letter-spacing: -0.015em;
 }
 .header h1 .pi-logo-mark {
-    width: 23px;
-    height: 23px;
+    width: calc(23rem / 12);
+    height: calc(23rem / 12);
     display: inline-block;
     flex-shrink: 0;
     background: var(--text);
@@ -112,7 +112,7 @@ a { color: inherit; }
 }
 .nav-search-btn,
 .nav-menu-btn {
-    height: 32px;
+    height: calc(32rem / 12);
     border: 1px solid transparent;
     background: transparent;
     color: var(--muted);
@@ -125,7 +125,7 @@ a { color: inherit; }
 .nav-search-btn {
     gap: 18px;
     padding: 0 10px 0 12px;
-    min-width: 190px;
+    min-width: calc(190rem / 12);
     justify-content: space-between;
     background: color-mix(in srgb, var(--surface) 68%, transparent);
     border-color: color-mix(in srgb, var(--dim) 76%, transparent);
@@ -133,12 +133,12 @@ a { color: inherit; }
 }
 .nav-search-btn kbd {
     color: color-mix(in srgb, var(--muted) 78%, transparent);
-    font-size: 11px;
+    font-size: calc(11rem / 12);
     font-family: inherit;
 }
 .nav-menu-btn {
-    width: 32px;
-    font-size: 20px;
+    width: calc(32rem / 12);
+    font-size: calc(20rem / 12);
     line-height: 1;
 }
 .nav-search-btn:hover,
@@ -155,7 +155,7 @@ a { color: inherit; }
     gap: 14px;
     margin-top: 28px;
     color: var(--muted);
-    font-size: 13px;
+    font-size: calc(13rem / 12);
 }
 .workspace-stats {
     display: flex;
@@ -173,7 +173,7 @@ a { color: inherit; }
     overflow: hidden;
 }
 .layout-toggle button {
-    height: 28px;
+    height: calc(28rem / 12);
     padding: 0 10px;
     border: 0;
     border-right: 1px solid color-mix(in srgb, var(--dim) 76%, transparent);
@@ -202,7 +202,7 @@ a { color: inherit; }
     flex-shrink: 0;
 }
 .schedules-nav-btn {
-    height: 28px;
+    height: calc(28rem / 12);
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -213,7 +213,7 @@ a { color: inherit; }
     border-radius: 6px;
     cursor: pointer;
     font: inherit;
-    font-size: 13px;
+    font-size: calc(13rem / 12);
     line-height: 1;
     transition: color 0.12s, background 0.12s, border-color 0.12s;
 }
@@ -250,13 +250,13 @@ a { color: inherit; }
     min-width: 0;
 }
 .new-session-btn {
-    width: 58px;
-    height: 58px;
+    width: calc(58rem / 12);
+    height: calc(58rem / 12);
     border-radius: 50%;
     border: 1px solid var(--accent);
     background: color-mix(in srgb, var(--surface) 86%, transparent);
     color: var(--accent);
-    font-size: 30px;
+    font-size: calc(30rem / 12);
     font-weight: 400;
     line-height: 1;
     cursor: pointer;
@@ -319,7 +319,7 @@ a { color: inherit; }
     flex: 1 1 auto;
     min-width: 0;
     color: var(--text-soft);
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     font-weight: 600;
     letter-spacing: 0.02em;
     text-transform: uppercase;
@@ -328,7 +328,7 @@ a { color: inherit; }
 .project-count {
     flex-shrink: 0;
     color: var(--muted);
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     text-align: right;
 }
 .project-count[data-running]:not([data-running="0"]) { color: var(--accent); }
@@ -358,15 +358,15 @@ a { color: inherit; }
 }
 .project-new-btn {
     all: unset;
-    width: 24px;
-    height: 24px;
+    width: calc(24rem / 12);
+    height: calc(24rem / 12);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border-radius: 4px;
     cursor: pointer;
     flex-shrink: 0;
-    font-size: 16px;
+    font-size: calc(16rem / 12);
     font-weight: 400;
     line-height: 1;
     color: var(--accent);
@@ -434,7 +434,7 @@ a { color: inherit; }
     flex: 1 1 auto;
     min-width: 0;
     color: var(--text-soft);
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     font-weight: 600;
     letter-spacing: 0.02em;
     text-transform: uppercase;
@@ -442,7 +442,7 @@ a { color: inherit; }
 .date-separator-count {
     flex-shrink: 0;
     color: var(--muted);
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     text-align: right;
 }
 .date-separator-count[data-running]:not([data-running="0"]) { color: var(--accent); }
@@ -464,7 +464,7 @@ a { color: inherit; }
     border: 1px solid color-mix(in srgb, var(--dim) 82%, transparent);
     background: color-mix(in srgb, var(--surface) 82%, transparent);
     color: var(--text-soft);
-    font-size: 13px;
+    font-size: calc(13rem / 12);
     font-weight: 500;
     -webkit-tap-highlight-color: transparent;
 }
@@ -521,8 +521,8 @@ a { color: inherit; }
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
+    width: calc(26rem / 12);
+    height: calc(26rem / 12);
     padding: 0;
     border: none;
     border-radius: 4px;
@@ -553,7 +553,7 @@ a { color: inherit; }
     padding: 3px 0;
     cursor: pointer;
     color: var(--muted);
-    font-size: 11px;
+    font-size: calc(11rem / 12);
     font-weight: 500;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -598,7 +598,7 @@ a { color: inherit; }
 }
 .session-title {
     color: var(--text);
-    font-size: 13px;
+    font-size: calc(13rem / 12);
     font-weight: 560;
     line-height: 1.45;
     letter-spacing: -0.01em;
@@ -618,13 +618,13 @@ a { color: inherit; }
     color: var(--muted);
     border: 1px solid var(--dim);
     padding: 2px 6px;
-    font-size: 10px;
+    font-size: calc(10rem / 12);
 }
 .session-project { display: none; }
 .session-card.show-project .session-project {
     display: block;
     color: var(--muted);
-    font-size: 11px;
+    font-size: calc(11rem / 12);
     line-height: 1.4;
     margin-bottom: 12px;
     white-space: nowrap;
@@ -633,7 +633,7 @@ a { color: inherit; }
 }
 .session-model {
     color: var(--text-soft);
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     line-height: 1.4;
     margin-bottom: 16px;
     white-space: nowrap;
@@ -646,7 +646,7 @@ a { color: inherit; }
     gap: 10px;
     min-width: 0;
     color: var(--muted);
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     white-space: nowrap;
     overflow: hidden;
 }
@@ -656,7 +656,7 @@ a { color: inherit; }
     color: var(--accent);
     flex-shrink: 0;
 }
-.session-active-status span { font-size: 9px; vertical-align: 0.08em; }
+.session-active-status span { font-size: calc(9rem / 12); vertical-align: 0.08em; }
 .session-card--running .session-active-status { display: inline-flex; gap: 5px; align-items: center; }
 .session-run-model { display: none; color: var(--accent); }
 .session-card--running .session-run-model:not(:empty) { display: none; }
@@ -664,7 +664,7 @@ a { color: inherit; }
     padding: 72px 0;
     color: var(--muted);
 }
-.empty-state h3 { color: var(--text); font-size: 14px; margin-bottom: 6px; }
+.empty-state h3 { color: var(--text); font-size: calc(14rem / 12); margin-bottom: 6px; }
 
 .not-found {
     display: flex;
@@ -688,7 +688,7 @@ a { color: inherit; }
 }
 .not-found-code {
     margin-top: 8px;
-    font-size: 56px;
+    font-size: calc(56rem / 12);
     font-weight: 700;
     line-height: 1;
     color: var(--accent);
@@ -696,13 +696,13 @@ a { color: inherit; }
 }
 .not-found-heading {
     margin-top: 12px;
-    font-size: 18px;
+    font-size: calc(18rem / 12);
     font-weight: 600;
     color: var(--text);
 }
 .not-found-message {
     margin-top: 8px;
-    font-size: 13px;
+    font-size: calc(13rem / 12);
     color: var(--muted);
     line-height: var(--line-height);
 }
@@ -740,7 +740,7 @@ body.modal-sheet-open { overflow: hidden; }
 .modal-sheet-header { display: none; }
 .modal h2 {
     color: var(--text);
-    font-size: 14px;
+    font-size: calc(14rem / 12);
     font-weight: 600;
     margin-bottom: 14px;
 }
@@ -765,7 +765,7 @@ body.modal-sheet-open { overflow: hidden; }
     background: transparent;
     color: var(--muted);
     cursor: pointer;
-    font-size: 11px;
+    font-size: calc(11rem / 12);
     padding: 4px 8px;
     overflow-wrap: anywhere;
     border-radius: 6px;
@@ -785,7 +785,7 @@ body.modal-sheet-open { overflow: hidden; }
     background: var(--body-bg);
     border: 1px solid var(--dim);
     border-radius: 6px;
-    font-size: 12px;
+    font-size: calc(12rem / 12);
 }
 .path-label {
     color: var(--muted);
@@ -835,7 +835,7 @@ body.modal-sheet-open { overflow: hidden; }
 .btn-secondary:active {
     transform: scale(0.98);
 }
-.modal-error { color: var(--danger); min-height: 16px; margin-top: 8px; font-size: 11px; }
+.modal-error { color: var(--danger); min-height: 16px; margin-top: 8px; font-size: calc(11rem / 12); }
 
 .projects-filter-switch {
     display: flex;
@@ -847,9 +847,9 @@ body.modal-sheet-open { overflow: hidden; }
     border-bottom: 1px solid var(--dim);
     cursor: pointer;
 }
-.projects-filter-title { display: block; color: var(--text); font-size: 13px; font-weight: 560; }
-.projects-filter-desc { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; line-height: 1.4; }
-.switch { position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
+.projects-filter-title { display: block; color: var(--text); font-size: calc(13rem / 12); font-weight: 560; }
+.projects-filter-desc { display: block; color: var(--muted); font-size: calc(11rem / 12); margin-top: 3px; line-height: 1.4; }
+.switch { position: relative; display: inline-block; width: calc(38rem / 12); height: calc(22rem / 12); flex-shrink: 0; }
 .switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .switch-slider {
     position: absolute;
@@ -863,8 +863,8 @@ body.modal-sheet-open { overflow: hidden; }
     position: absolute;
     left: 3px;
     top: 3px;
-    width: 16px;
-    height: 16px;
+    width: calc(16rem / 12);
+    height: calc(16rem / 12);
     border-radius: 50%;
     background: var(--text-soft);
     transition: transform 0.15s ease, background 0.15s ease;
@@ -888,7 +888,7 @@ body.modal-sheet-open { overflow: hidden; }
 .projects-search {
     flex: 1 1 auto;
     min-width: 0;
-    height: 36px;
+    height: calc(36rem / 12);
     box-sizing: border-box;
     background: var(--body-bg);
     border: 1px solid var(--dim);
@@ -896,19 +896,19 @@ body.modal-sheet-open { overflow: hidden; }
     padding: 0 12px;
     border-radius: 6px;
     outline: none;
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .projects-search:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .projects-bulk-btn {
     flex: 0 0 auto;
-    height: 36px;
+    height: calc(36rem / 12);
     box-sizing: border-box;
     border: 1px solid var(--dim);
     background: transparent;
     color: var(--text-soft);
     cursor: pointer;
-    font-size: 11px;
+    font-size: calc(11rem / 12);
     padding: 0 14px;
     border-radius: 6px;
     white-space: nowrap;
@@ -927,7 +927,7 @@ body.modal-sheet-open { overflow: hidden; }
     overflow-y: auto;
     margin-bottom: 12px;
 }
-.projects-empty { color: var(--muted); font-size: 12px; padding: 12px 4px; }
+.projects-empty { color: var(--muted); font-size: calc(12rem / 12); padding: 12px 4px; }
 .project-row {
     display: flex;
     align-items: center;
@@ -942,8 +942,8 @@ body.modal-sheet-open { overflow: hidden; }
 .project-row input[type="checkbox"] {
     appearance: none;
     -webkit-appearance: none;
-    width: 18px;
-    height: 18px;
+    width: calc(18rem / 12);
+    height: calc(18rem / 12);
     margin: 0;
     border: 1.5px solid var(--muted);
     border-radius: 5px;
@@ -964,8 +964,8 @@ body.modal-sheet-open { overflow: hidden; }
     position: absolute;
     top: 46%;
     left: 50%;
-    width: 5px;
-    height: 9px;
+    width: calc(5rem / 12);
+    height: calc(9rem / 12);
     border: solid var(--body-bg);
     border-width: 0 2px 2px 0;
     transform: translate(-50%, -50%) rotate(45deg);
@@ -976,7 +976,7 @@ body.modal-sheet-open { overflow: hidden; }
 }
 .project-row-name {
     color: var(--text);
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     flex: 1 1 auto;
     min-width: 0;
     order: 1;
@@ -997,13 +997,13 @@ body.modal-sheet-open { overflow: hidden; }
 }
 .project-row button.project-row-name:disabled { cursor: default; }
 .project-row-name bdi { direction: ltr; unicode-bidi: bidi-override; }
-.project-row-count { color: var(--muted); font-size: 11px; white-space: nowrap; flex: 0 0 auto; order: 2; }
+.project-row-count { color: var(--muted); font-size: calc(11rem / 12); white-space: nowrap; flex: 0 0 auto; order: 2; }
 .project-row-remove {
     border: 1px solid var(--dim);
     background: transparent;
     color: var(--muted);
     cursor: pointer;
-    font-size: 11px;
+    font-size: calc(11rem / 12);
     padding: 3px 8px;
     border-radius: 6px;
     flex: 0 0 auto;
@@ -1020,7 +1020,7 @@ body.modal-sheet-open { overflow: hidden; }
 .projects-footer-label {
     display: block;
     color: var(--text-soft);
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     font-weight: 560;
     margin-bottom: 8px;
 }
@@ -1061,7 +1061,7 @@ body.modal-sheet-open { overflow: hidden; }
     }
     .layout-toggle button {
         padding: 0 8px;
-        font-size: 11px;
+        font-size: calc(11rem / 12);
     }
 
     .modal-overlay {
@@ -1090,7 +1090,7 @@ body.modal-sheet-open { overflow: hidden; }
     .modal-sheet-header {
         display: flex;
         align-items: center;
-        min-height: 52px;
+        min-height: calc(52rem / 12);
         padding: env(safe-area-inset-top) 0 0;
         margin: 0 -16px 16px;
         border-bottom: 1px solid var(--dim);
@@ -1103,13 +1103,13 @@ body.modal-sheet-open { overflow: hidden; }
         align-items: center;
         gap: 4px;
         min-width: 0;
-        height: 52px;
+        height: calc(52rem / 12);
         padding: 0 12px;
         background: transparent;
         border: 0;
         color: var(--text);
         font: inherit;
-        font-size: 12px;
+        font-size: calc(12rem / 12);
         cursor: pointer;
         transition: color 0.15s ease, transform 0.15s ease;
     }
@@ -1121,7 +1121,7 @@ body.modal-sheet-open { overflow: hidden; }
     }
     .modal-sheet-back span:first-child {
         color: var(--muted);
-        font-size: 14px;
+        font-size: calc(14rem / 12);
     }
     .modal h2 { display: none; }
     .modal input {
@@ -1156,8 +1156,8 @@ body.modal-sheet-open { overflow: hidden; }
     .modal-actions .btn-secondary { display: none; }
     .modal-actions .btn-primary {
         width: 100%;
-        min-height: 48px;
-        font-size: 16px;
+        min-height: calc(48rem / 12);
+        font-size: calc(16rem / 12);
     }
 
     /* Manage Projects sheet: switch + footer stay fixed, the list scrolls. */
@@ -1215,7 +1215,7 @@ body.modal-sheet-open { overflow: hidden; }
     flex: 1;
     border: none;
     background: transparent;
-    font-size: 13px;
+    font-size: calc(13rem / 12);
     color: var(--text);
     outline: none;
     font-family: inherit;
@@ -1227,7 +1227,7 @@ body.modal-sheet-open { overflow: hidden; }
     flex-wrap: wrap;
     gap: 2px;
     padding: 2px 0;
-    font-size: 12px;
+    font-size: calc(12rem / 12);
 }
 .breadcrumb-item {
     background: none;
@@ -1236,7 +1236,7 @@ body.modal-sheet-open { overflow: hidden; }
     cursor: pointer;
     padding: 2px 5px;
     border-radius: 4px;
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     font-family: inherit;
 }
 .breadcrumb-item:hover {
@@ -1265,7 +1265,7 @@ body.modal-sheet-open { overflow: hidden; }
     gap: 8px;
     padding: 6px 10px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: calc(13rem / 12);
     color: var(--text);
     border-bottom: 1px solid color-mix(in srgb, var(--dim) 60%, transparent);
 }
@@ -1296,7 +1296,7 @@ body.modal-sheet-open { overflow: hidden; }
     padding: 20px;
     text-align: center;
     color: var(--muted);
-    font-size: 13px;
+    font-size: calc(13rem / 12);
 }
 .browser-error { color: var(--danger); }
 
@@ -1312,7 +1312,7 @@ body.modal-sheet-open { overflow: hidden; }
     color: var(--muted);
     border-radius: 4px;
     padding: 3px 8px;
-    font-size: 12px;
+    font-size: calc(12rem / 12);
     cursor: pointer;
     font-family: inherit;
 }

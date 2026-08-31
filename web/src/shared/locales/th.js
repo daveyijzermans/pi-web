@@ -394,6 +394,8 @@ export default {
   'settings.interfaceFontSizeHint': 'ขนาดข้อความ UI ของแอป (px)',
   'settings.contentFontSize': 'ขนาดฟอนต์เนื้อหา',
   'settings.contentFontSizeHint': 'ขนาดข้อความที่แสดง (px)',
+  'settings.codeFontSize': 'ขนาดฟอนต์โค้ด',
+  'settings.codeFontSizeHint': 'ขนาดของโค้ด ผลลัพธ์เครื่องมือ และข้อความการคิด (px)',
   'settings.fontBuiltIn': 'ในตัว',
   'settings.fontInstalled': 'Installed',
   'settings.fontDetectUnsupported':

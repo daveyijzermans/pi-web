@@ -393,6 +393,8 @@ export default {
   'settings.interfaceFontSizeHint': 'ទំហំអត្ថបទ UI កម្មវិធី (px)។',
   'settings.contentFontSize': 'ទំហំពុម្ពអក្សរមាតិកា',
   'settings.contentFontSizeHint': 'ទំហំអត្ថបទសារដែលបង្ហាញ (px)។',
+  'settings.codeFontSize': 'ទំហំពុម្ពអក្សរកូដ',
+  'settings.codeFontSizeHint': 'ទំហំនៃកូដ លទ្ធផលឧបករណ៍ និងអត្ថបទគិត (px).',
   'settings.fontBuiltIn': 'មានស្រាប់',
   'settings.fontInstalled': 'Installed',
   'settings.fontDetectUnsupported':

@@ -30,17 +30,18 @@ const defaultMonoStack = "ui-monospace, 'Cascadia Code', 'Source Code Pro', Menl
 
 // fontProvider returns the resolved CSS font-family stacks and pixel sizes for
 // the interface (--font-sans / --font-size-ui), content (--font-content /
-// --font-content-size) and code (--font-code). Injected into the shell so the
-// page paints with the chosen fonts/sizes before any JS runs. Defaults to the
-// monospace stack; app wiring overrides it via SetFontProvider to read the DB.
-var fontProvider = func() (uiStack, contentStack, codeStack, uiSize, contentSize string) {
-	return defaultMonoStack, defaultMonoStack, defaultMonoStack, "12", "13"
+// --font-content-size) and code (--font-code / --font-code-size). Injected
+// into the shell so the page paints with the chosen fonts/sizes before any JS
+// runs. Defaults to the monospace stack; app wiring overrides it via
+// SetFontProvider to read the DB.
+var fontProvider = func() (uiStack, contentStack, codeStack, uiSize, contentSize, codeSize string) {
+	return defaultMonoStack, defaultMonoStack, defaultMonoStack, "12", "13", "12"
 }
 
 // SetFontProvider installs the function used to resolve the current
 // server-backed interface/content/code font stacks and sizes for server-side
 // injection.
-func SetFontProvider(fn func() (string, string, string, string, string)) {
+func SetFontProvider(fn func() (string, string, string, string, string, string)) {
 	if fn != nil {
 		fontProvider = fn
 	}
@@ -136,7 +137,7 @@ func renderLiveDocumentStart(data liveDocumentData) string {
 		b.WriteByte('\n')
 	}
 	b.WriteString("<link rel=\"stylesheet\" href=\"/custom-themes.css\">\n")
-	fontUI, fontContent, fontCode, fontUISize, fontContentSize := fontProvider()
+	fontUI, fontContent, fontCode, fontUISize, fontContentSize, fontCodeSize := fontProvider()
 	b.WriteString("<style id=\"pi-web-fonts\">:root{--font-sans:")
 	b.WriteString(fontUI)
 	b.WriteString(";--font-content:")
@@ -147,6 +148,8 @@ func renderLiveDocumentStart(data liveDocumentData) string {
 	b.WriteString(fontUISize)
 	b.WriteString("px;--font-content-size:")
 	b.WriteString(fontContentSize)
+	b.WriteString("px;--font-code-size:")
+	b.WriteString(fontCodeSize)
 	b.WriteString("px;}</style>\n")
 	// After the stylesheets so the parser-blocking script can read the custom
 	// theme's --body-bg from the now-loaded /custom-themes.css (see comment on

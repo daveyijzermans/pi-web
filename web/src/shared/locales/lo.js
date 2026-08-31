@@ -393,6 +393,8 @@ export default {
   'settings.interfaceFontSizeHint': 'ຂະໜາດຂໍ້ຄວາມ UI ແອັບ (px).',
   'settings.contentFontSize': 'ຂະໜາດຟອນເນື້ອຫາ',
   'settings.contentFontSizeHint': 'ຂະໜາດຂໍ້ຄວາມທີ່ສະແດງ (px).',
+  'settings.codeFontSize': 'ຂະໜາດຟອນລະຫັດ',
+  'settings.codeFontSizeHint': 'ຂະໜາດຂອງລະຫັດ, ຜົນອອກຂອງເຄື່ອງມື ແລະ ຂໍ້ຄວາມການຄິດ (px).',
   'settings.fontBuiltIn': 'ມີໃນຕົວ',
   'settings.fontInstalled': 'Installed',
   'settings.fontDetectUnsupported':

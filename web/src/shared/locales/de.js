@@ -396,6 +396,8 @@ export default {
   'settings.interfaceFontSizeHint': 'Größe des Oberflächentexts (px).',
   'settings.contentFontSize': 'Schriftgröße des Inhalts',
   'settings.contentFontSizeHint': 'Größe des gerenderten Nachrichtentexts (px).',
+  'settings.codeFontSize': 'Code-Schriftgröße',
+  'settings.codeFontSizeHint': 'Größe von Code, Werkzeugausgabe und Denktext (px).',
   'settings.fontBuiltIn': 'Integriert',
   'settings.fontInstalled': 'Installiert',
   'settings.fontDetectUnsupported':
