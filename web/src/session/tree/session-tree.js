@@ -1,4 +1,3 @@
-
 const REPARENTABLE_ORPHAN_TYPES = new Set(['model_change', 'thinking_level_change']);
 
 // Session-metadata entries (a model change, a thinking-level change) are sometimes

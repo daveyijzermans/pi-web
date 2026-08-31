@@ -173,7 +173,11 @@ describe('setupWorkerStatusPolling', () => {
       chatApi: {
         getWorkerStatus: vi.fn(() =>
           Promise.resolve(
-            response({ state: 'running', compacting: true, blockedReason: 'session is compacting' }),
+            response({
+              state: 'running',
+              compacting: true,
+              blockedReason: 'session is compacting',
+            }),
           ),
         ),
       },

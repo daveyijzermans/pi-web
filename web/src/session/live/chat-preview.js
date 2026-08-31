@@ -1,31 +1,8 @@
-export function getSpinnerConfig(windowImpl = typeof window !== 'undefined' ? window : null) {
-  let style = 'runcat';
-  try {
-    if (windowImpl && windowImpl.localStorage) {
-      const saved = windowImpl.localStorage.getItem('pi-sessions:spinner-style');
-      if (saved === 'braille') {
-        style = 'braille';
-      }
-    }
-  } catch (_) {}
+import { getSpinnerConfig } from '../../shared/spinner.js';
 
-  if (style === 'braille') {
-    return {
-      frames: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
-      fontFamily: 'monospace',
-      interval: 80,
-      width: '12px',
-    };
-  } else {
-    // runcat frames mapping to unicode private use area characters in runcat.ttf font
-    return {
-      frames: ['', '', '', '', ''],
-      fontFamily: "'runcat', monospace",
-      interval: 100,
-      width: '18px',
-    };
-  }
-}
+// Re-exported: the spinner config moved to shared/spinner.js (it is used far
+// beyond the chat preview), but existing imports resolve it from here too.
+export { getSpinnerConfig };
 
 export function clearChatPreviewState(state, { keepAssistant = false } = {}) {
   if (state.pendingUserEl && state.pendingUserEl.parentNode) {
@@ -47,8 +24,6 @@ export function finishChatPreviewState(state) {
   state.chatPreviewEl.classList.add('done');
   return true;
 }
-// Test placeholder for TestSessionViteSourceShowsAnimatedWorkingPreviewLabel: working<span class="working-dots"
-
 const CREATIVE_MESSAGES = [
   'Working...',
   'Thinking...',
@@ -141,16 +116,13 @@ export function startRunningSpinner(
     el.className = 'chat-running-spinner';
     const spinner = documentImpl.createElement('span');
     spinner.className = 'preview-spinner';
-    spinner.style.color = 'var(--accent)';
-    spinner.style.marginRight = '6px';
+    // Static styling lives in session.css; only the config-dependent font and
+    // width are set here.
     spinner.style.fontFamily = config.fontFamily;
-    spinner.style.display = 'inline-block';
     spinner.style.width = config.width;
-    spinner.style.textAlign = 'center';
     spinner.textContent = config.frames[0];
     const text = documentImpl.createElement('span');
     text.className = 'preview-text';
-    text.style.color = 'var(--muted)';
     text.textContent = 'Working...';
     el.append(spinner, text);
     container.appendChild(el);

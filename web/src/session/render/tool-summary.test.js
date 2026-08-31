@@ -56,6 +56,19 @@ describe('resolveToolResult', () => {
   });
 });
 
+describe('resolveToolResult with toolResultMap', () => {
+  it('prefers the map lookup over scanning entries', () => {
+    const message = { role: 'toolResult', toolCallId: 'tc1', isError: false, content: [] };
+    const model = { entries: [], toolResultMap: new Map([['tc1', message]]) };
+    expect(resolveToolResult(model, 'tc1')).toBe(message);
+  });
+
+  it('returns null from the map path when the call id is absent', () => {
+    const model = { entries: [], toolResultMap: new Map() };
+    expect(resolveToolResult(model, 'tc-missing')).toBeNull();
+  });
+});
+
 describe('resolveToolStatus', () => {
   it('returns success when result exists without error', () => {
     const model = makeModel([{ id: 'r1', callId: 'tc1' }]);

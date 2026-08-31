@@ -113,7 +113,7 @@
   import { icon, X } from '../../shared/icons.js';
   import { t } from '../../shared/i18n.js';
   import { createStatusEvents } from '../../shared/status-events.js';
-  import { getSpinnerConfig } from '../../session/live/chat-preview.js';
+  import { animateSpinner, spinnerStyleFor } from '../../shared/spinner.js';
 
   let {
     limit = 8,
@@ -153,18 +153,14 @@
 
   function startSpinner() {
     if (spinnerTimer) return;
-    const config = getSpinnerConfig(window);
-    let frame = 0;
-    spinnerStyle = `font-family:${config.fontFamily};width:${config.width}`;
-    spinnerChar = config.frames[0] || '';
-    spinnerTimer = window.setInterval(() => {
-      frame = (frame + 1) % config.frames.length;
-      spinnerChar = config.frames[frame] || '';
-    }, config.interval);
+    spinnerTimer = animateSpinner((char, config) => {
+      spinnerChar = char;
+      spinnerStyle = spinnerStyleFor(config);
+    });
   }
 
   function stopSpinner() {
-    if (spinnerTimer) window.clearInterval(spinnerTimer);
+    if (spinnerTimer) spinnerTimer();
     spinnerTimer = null;
   }
 

@@ -292,10 +292,11 @@
     ></span><span class="pi-git-status" id="pi-git-status" hidden></span>
   </div>
   <div class="pi-git-right">
-    <CompactButton
-      {sessionId}
-    /><button type="button" class="pi-footer-button pi-btw-button" id="pi-btw-button" title="btw"
-      >btw</button
+    <CompactButton {sessionId} /><button
+      type="button"
+      class="pi-footer-button pi-btw-button"
+      id="pi-btw-button"
+      title="btw">btw</button
     >
     <div class="pi-git-pr" id="pi-git-pr" hidden>
       <button type="button" class="pi-footer-button pi-git-primary" id="pi-git-primary"

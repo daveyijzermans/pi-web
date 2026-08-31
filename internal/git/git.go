@@ -61,15 +61,8 @@ type Info struct {
 	PRURL string `json:"prUrl"`
 }
 
-// IssueInfo describes a single open GitHub issue.
+// IssueInfo describes a single open GitHub issue or pull request.
 type IssueInfo struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	URL    string `json:"url"`
-}
-
-// PRInfo describes a single open GitHub pull request.
-type PRInfo struct {
 	Number int    `json:"number"`
 	Title  string `json:"title"`
 	URL    string `json:"url"`
@@ -119,8 +112,7 @@ func Describe(dir string) (Info, error) {
 		return Info{IsRepo: false}, nil
 	}
 	info := Info{IsRepo: true, Branch: branch}
-	info.Dirty = isDirty(dir)
-	info.Modified, info.Added, info.Deleted = dirtyCounts(dir)
+	info.Dirty, info.Modified, info.Added, info.Deleted = statusCounts(dir)
 	info.Ahead, info.Behind = aheadBehind(dir)
 	info.HasChanges = info.Dirty || info.Ahead > 0
 	if def := DefaultBranch(dir); def != "" && def == branch {
@@ -148,23 +140,21 @@ func HasLocalChanges(dir string) bool {
 
 // isDirty reports whether the working tree has unstaged or staged changes.
 func isDirty(dir string) bool {
-	if out, err := run(dir, "status", "--porcelain"); err == nil {
-		return out != ""
-	}
-	return false
+	dirty, _, _, _ := statusCounts(dir)
+	return dirty
 }
 
-// dirtyCounts tallies changed files by kind from `git status --porcelain` for
-// the footer badges. Untracked files are folded into the "added"/new count
-// (the footer shows N/M/D); the file tree gets untracked separately via
-// Summarize on the /api/files/git-status endpoint.
-func dirtyCounts(dir string) (modified, added, deleted int) {
+// statusCounts runs `git status --porcelain` once and derives both the dirty
+// flag and the per-kind change counts for the footer badges. Untracked files
+// are folded into the "added"/new count (the footer shows N/M/D); the file
+// tree gets untracked separately via Summarize on /api/files/git-status.
+func statusCounts(dir string) (dirty bool, modified, added, deleted int) {
 	out, err := run(dir, "status", "--porcelain")
 	if err != nil || out == "" {
-		return 0, 0, 0
+		return false, 0, 0, 0
 	}
 	s := Summarize(parsePorcelain(out))
-	return s.Modified, s.Added + s.Untracked, s.Deleted
+	return true, s.Modified, s.Added + s.Untracked, s.Deleted
 }
 
 // aheadBehind returns the number of local commits ahead of upstream and
@@ -328,74 +318,48 @@ func existingOpenPRURL(dir string) string {
 	return ""
 }
 
-// OpenIssues returns the list of open GitHub issues for the repository in dir,
-// using the gh CLI when available. It is best-effort: a missing/unauthenticated
-// gh, non-repo dir, or network error all yield nil.
-func OpenIssues(dir string) []IssueInfo {
+// ghJSON runs a gh CLI command in dir and unmarshals its JSON stdout into
+// out. Best-effort: a missing/unauthenticated gh, non-repo dir, network
+// error, or bad JSON all return false and leave out untouched.
+func ghJSON(dir string, out any, args ...string) bool {
 	gh, err := exec.LookPath("gh")
 	if err != nil {
-		return nil
+		return false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, gh, "issue", "list", "--state", "open", "--json", "number,title,url")
+	cmd := exec.CommandContext(ctx, gh, args...)
 	cmd.Dir = dir
-	out, err := cmd.Output()
+	raw, err := cmd.Output()
 	if err != nil {
-		return nil
+		return false
 	}
+	return json.Unmarshal(raw, out) == nil
+}
+
+// OpenIssues returns the list of open GitHub issues for the repository in dir,
+// via the gh CLI. Best-effort: any failure yields nil.
+func OpenIssues(dir string) []IssueInfo {
 	var issues []IssueInfo
-	if err := json.Unmarshal(out, &issues); err != nil {
-		return nil
-	}
+	ghJSON(dir, &issues, "issue", "list", "--state", "open", "--json", "number,title,url")
 	return issues
 }
 
 // OpenPRs returns the list of open GitHub pull requests for the repository in
-// dir, using the gh CLI when available. It is best-effort: a missing/
-// unauthenticated gh, non-repo dir, or network error all yield nil.
-func OpenPRs(dir string) []PRInfo {
-	gh, err := exec.LookPath("gh")
-	if err != nil {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, gh, "pr", "list", "--state", "open", "--json", "number,title,url")
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		return nil
-	}
-	var prs []PRInfo
-	if err := json.Unmarshal(out, &prs); err != nil {
-		return nil
-	}
+// dir, via the gh CLI. Best-effort: any failure yields nil.
+func OpenPRs(dir string) []IssueInfo {
+	var prs []IssueInfo
+	ghJSON(dir, &prs, "pr", "list", "--state", "open", "--json", "number,title,url")
 	return prs
 }
 
 // RepoDescription returns the GitHub repository description for the repository
-// in dir, using the gh CLI when available. It is best-effort: a missing/
-// unauthenticated gh, non-repo dir, or network error all yield "".
+// in dir, via the gh CLI. Best-effort: any failure yields "".
 func RepoDescription(dir string) string {
-	gh, err := exec.LookPath("gh")
-	if err != nil {
-		return ""
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, gh, "repo", "view", "--json", "description")
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
 	var rv struct {
 		Description string `json:"description"`
 	}
-	if err := json.Unmarshal(out, &rv); err != nil {
-		return ""
-	}
+	ghJSON(dir, &rv, "repo", "view", "--json", "description")
 	return rv.Description
 }
 

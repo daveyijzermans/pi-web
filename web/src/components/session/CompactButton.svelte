@@ -14,13 +14,7 @@
   // compactRequestTimeout (5m) so the SSE-driven signal wins normally.
   const COMPACT_TIMEOUT_MS = 6 * 60_000;
 
-  let {
-    sessionId = '',
-    windowImpl,
-    fetchImpl,
-    setTimeoutImpl,
-    clearTimeoutImpl,
-  } = $props();
+  let { sessionId = '', windowImpl, fetchImpl, setTimeoutImpl, clearTimeoutImpl } = $props();
 
   let compacting = $state(false);
   let title = $state(t('git.compact'));
@@ -61,7 +55,9 @@
     const setTimer = setTimeoutImpl ?? win().setTimeout?.bind(win());
     if (setTimer) timer = setTimer(() => fail(t('git.compactFailed')), COMPACT_TIMEOUT_MS);
     const doFetch = fetchImpl ?? win().fetch?.bind(win()) ?? fetch;
-    Promise.resolve(doFetch('/api/chat/compact?id=' + encodeURIComponent(sessionId), { method: 'POST' }))
+    Promise.resolve(
+      doFetch('/api/chat/compact?id=' + encodeURIComponent(sessionId), { method: 'POST' }),
+    )
       .then((resp) =>
         resp
           .json()
@@ -115,6 +111,6 @@
   id="pi-compact-button"
   {title}
   disabled={compacting}
-  onclick={start}><span id="pi-compact-label">{compacting ? t('git.compacting') : t('git.compact')}</span
-  ></button
+  onclick={start}
+  ><span id="pi-compact-label">{compacting ? t('git.compacting') : t('git.compact')}</span></button
 >

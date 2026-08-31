@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"pi-web/internal/agentdir"
 )
 
 // web-turn markers exist to survive a pi-web restart. Chat workers are
@@ -16,9 +18,11 @@ import (
 // block is skipped and a fresh Send can safely take the session back over.
 
 // webTurnDir is the directory holding one marker file per session with a
-// pi-web turn in flight.
+// pi-web turn in flight. Lives under the pi-web data dir like the rest of
+// pi-web's state (a marker is transient, so no migration from the old
+// top-level <agentDir>/web-turns location is needed).
 func (s *Server) webTurnDir() string {
-	return filepath.Join(s.agentDir, "web-turns")
+	return filepath.Join(agentdir.WebDir(s.agentDir), "web-turns")
 }
 
 // markWebTurnActive records that pi-web has dispatched a turn for this session.

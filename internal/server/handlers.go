@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -593,22 +594,15 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// sortEntries orders directories before files, each group alphabetically
+// (case-insensitive).
 func sortEntries(entries []browseEntry) {
-	dirs := []browseEntry{}
-	files := []browseEntry{}
-	for _, e := range entries {
-		if e.IsDir {
-			dirs = append(dirs, e)
-		} else {
-			files = append(files, e)
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].IsDir != entries[j].IsDir {
+			return entries[i].IsDir
 		}
-	}
-	sortSlice(dirs, false)
-	sortSlice(files, false)
-	merged := append(dirs, files...)
-	for i := range entries {
-		entries[i] = merged[i]
-	}
+		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
+	})
 }
 
 // handleDrives lists the filesystem roots available on the host: drive letters
@@ -635,19 +629,6 @@ func listDrives() []string {
 		}
 	}
 	return drives
-}
-
-func sortSlice(entries []browseEntry, _ bool) {
-	for i := 1; i < len(entries); i++ {
-		for j := i; j > 0; j-- {
-			a := strings.ToLower(entries[j-1].Name)
-			b := strings.ToLower(entries[j].Name)
-			if a <= b {
-				break
-			}
-			entries[j-1], entries[j] = entries[j], entries[j-1]
-		}
-	}
 }
 
 func (s *Server) handleAvailableModels(w http.ResponseWriter, r *http.Request) {

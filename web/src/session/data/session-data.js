@@ -35,20 +35,22 @@ export function getSessionSearchParams({ documentImpl = document, windowImpl = w
 export function buildSessionLookups(entries = []) {
   const byId = new Map();
   const toolCallMap = new Map();
+  const toolResultMap = new Map();
   const labelMap = new Map();
 
   for (const entry of entries) {
     if (entry?.id) byId.set(entry.id, entry);
 
-    if (
-      entry?.type === 'message' &&
-      entry.message?.role === 'assistant' &&
-      Array.isArray(entry.message.content)
-    ) {
-      for (const block of entry.message.content) {
-        if (block?.type === 'toolCall') {
-          toolCallMap.set(block.id, { name: block.name, arguments: block.arguments });
+    if (entry?.type === 'message') {
+      if (entry.message?.role === 'assistant' && Array.isArray(entry.message.content)) {
+        for (const block of entry.message.content) {
+          if (block?.type === 'toolCall') {
+            toolCallMap.set(block.id, { name: block.name, arguments: block.arguments });
+          }
         }
+      }
+      if (entry.message?.role === 'toolResult' && entry.message.toolCallId) {
+        toolResultMap.set(entry.message.toolCallId, entry.message);
       }
     }
 
@@ -58,7 +60,7 @@ export function buildSessionLookups(entries = []) {
     }
   }
 
-  return { byId, toolCallMap, labelMap };
+  return { byId, toolCallMap, toolResultMap, labelMap };
 }
 
 export function createSessionDataModel(payload, params = new URLSearchParams()) {

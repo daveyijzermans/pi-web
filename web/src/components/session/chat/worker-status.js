@@ -50,7 +50,9 @@ export function setupWorkerStatusPolling({
       if (compacting !== lastCompacting) {
         lastCompacting = compacting;
         try {
-          windowImpl.dispatchEvent(new CustomEventImpl('pi-compact-state', { detail: { compacting } }));
+          windowImpl.dispatchEvent(
+            new CustomEventImpl('pi-compact-state', { detail: { compacting } }),
+          );
         } catch {
           // Event construction may be unsupported in some test envs.
         }

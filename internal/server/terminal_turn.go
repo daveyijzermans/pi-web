@@ -2,16 +2,16 @@ package server
 
 import (
 	"os"
-	"path/filepath"
 	"time"
 
+	"pi-web/internal/agentdir"
 	"pi-web/internal/sessions"
 )
 
 // workerSocketDir is where detached worker-holders listen (one socket per
-// session). Mirrors the path the app wires into the worker factory.
+// session); the app wires the same path into the worker factory.
 func (s *Server) workerSocketDir() string {
-	return filepath.Join(s.agentDir, "pi-web", "workers")
+	return agentdir.WorkerSocketDir(s.agentDir)
 }
 
 // markTurnStopped records that a session's turn was force-stopped (holder

@@ -22,7 +22,7 @@
     sessionsCountLabel,
   } from '../../index/sessions.js';
   import { prefetchSession } from '../../routes/session-prefetch.js';
-  import { getSpinnerConfig } from '../../session/live/chat-preview.js';
+  import { animateSpinner, getSpinnerConfig, spinnerStyleFor } from '../../shared/spinner.js';
   import { sessionRuntime } from '../../session/session-runtime.js';
   import { createStatusEvents } from '../../shared/status-events.js';
   import { SvelteSet } from 'svelte/reactivity';
@@ -195,34 +195,26 @@
       return;
     }
 
-    const config = getSpinnerConfig(window);
-    let frame = 0;
-    spinnerChar = config.frames[0] || '';
-    spinnerStyle = `font-family:${config.fontFamily};width:${config.width}`;
-    const timer = window.setInterval(() => {
-      frame = (frame + 1) % config.frames.length;
-      spinnerChar = config.frames[frame] || '';
-    }, config.interval);
-    return () => window.clearInterval(timer);
+    return animateSpinner((char, config) => {
+      spinnerChar = char;
+      spinnerStyle = spinnerStyleFor(config);
+    });
   });
 
   // The active session's own cat runs (cycles the runcat frames) while its
   // turn is running and rests on the first frame when idle, so the open
   // session gets the same running-cat cue as the other rows' spinner.
   $effect(() => {
-    const config = getSpinnerConfig(typeof window !== 'undefined' ? window : null);
-    activeSessionCatStyle = `font-family:${config.fontFamily}`;
     if (!isRunning(currentSessionId)) {
+      const config = getSpinnerConfig(typeof window !== 'undefined' ? window : null);
+      activeSessionCatStyle = `font-family:${config.fontFamily}`;
       activeSessionCatChar = config.frames[0] || '';
       return;
     }
-    let frame = 0;
-    activeSessionCatChar = config.frames[0] || '';
-    const timer = window.setInterval(() => {
-      frame = (frame + 1) % config.frames.length;
-      activeSessionCatChar = config.frames[frame] || '';
-    }, config.interval);
-    return () => window.clearInterval(timer);
+    return animateSpinner((char, config) => {
+      activeSessionCatChar = char;
+      activeSessionCatStyle = `font-family:${config.fontFamily}`;
+    });
   });
 
   function onSessionClick(event, href) {

@@ -2971,6 +2971,19 @@
       padding: calc(var(--line-height) / 2) var(--line-height) var(--line-height);
     }
 
+    /* Font family and width come inline from the spinner config (runcat vs
+       braille); everything static lives here. */
+    #chat-running-spinner .preview-spinner {
+      color: var(--accent);
+      margin-right: 6px;
+      display: inline-block;
+      text-align: center;
+    }
+
+    #chat-running-spinner .preview-text {
+      color: var(--muted);
+    }
+
     .chat-preview-stream .working-dots::after {
       content: '';
       display: inline-block;

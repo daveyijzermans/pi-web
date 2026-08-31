@@ -5,7 +5,7 @@
   // drag/resize/SSE/status-polling/submit stay imperative. Live-only — never in
   // the export bundle. See docs/sequence-flows/btw.md.
   import { onMount } from 'svelte';
-  import { getSpinnerConfig } from '../../session/live/chat-preview.js';
+  import { animateSpinner, spinnerStyleFor } from '../../shared/spinner.js';
   import { t } from '../../shared/i18n.js';
   import { icon, X, Square, Send } from '../../shared/icons.js';
   import {
@@ -46,8 +46,6 @@
   let globalSource = null;
   let statusTimer = null;
   let spinnerTimer = null;
-  let spinnerFrame = 0;
-  let spinnerConfig = null;
   let lastSentAt = 0;
   let nearBottom = true;
 
@@ -138,17 +136,14 @@
   // ── worker running state (spinner + cancel button) ──
   function startSpinner() {
     if (spinnerTimer) return;
-    spinnerConfig = getSpinnerConfig(window);
-    spinnerStyle = `font-family:${spinnerConfig.fontFamily};width:${spinnerConfig.width}`;
-    spinnerChar = spinnerConfig.frames[spinnerFrame % spinnerConfig.frames.length] || '';
-    spinnerTimer = window.setInterval(() => {
-      spinnerFrame += 1;
-      spinnerChar = spinnerConfig.frames[spinnerFrame % spinnerConfig.frames.length] || '';
-    }, spinnerConfig.interval || 100);
+    spinnerTimer = animateSpinner((char, config) => {
+      spinnerChar = char;
+      spinnerStyle = spinnerStyleFor(config);
+    });
   }
   function stopSpinner() {
     if (spinnerTimer) {
-      window.clearInterval(spinnerTimer);
+      spinnerTimer();
       spinnerTimer = null;
     }
   }

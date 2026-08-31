@@ -48,21 +48,24 @@
   const hiddenCount = $derived(split.lines.length - PREVIEW_LINES);
 </script>
 
+{#snippet outputLines(lines)}
+  {#if lang}
+    <div class="code-with-gutter">
+      <div class="code-gutter">
+        {#each lines as _line, i (i)}<span>{i + 1}</span>{/each}
+      </div>
+      <pre><code class="hljs" data-highlight-pending data-lang={lang}>{lines.join('\n')}</code
+        ></pre>
+    </div>
+  {:else}
+    {#each lines as line, i (i)}<div>{line}</div>{/each}
+  {/if}
+{/snippet}
+
 {#if huge}
   <div class="tool-output tool-output-huge">
     <div class="output-preview">
-      {#if lang}
-        <div class="code-with-gutter">
-          <div class="code-gutter">
-            {#each hugePreviewLines as _line, i (i)}<span>{i + 1}</span>{/each}
-          </div>
-          <pre><code class="hljs" data-highlight-pending data-lang={lang}
-              >{hugePreviewLines.join('\n')}</code
-            ></pre>
-        </div>
-      {:else}
-        {#each hugePreviewLines as line, i (i)}<div>{line}</div>{/each}
-      {/if}
+      {@render outputLines(hugePreviewLines)}
     </div>
     {#if showFull}
       <pre class="output-huge-full">{text}</pre>
@@ -79,47 +82,15 @@
   <!-- eslint-disable-next-line svelte/no-static-element-interactions -->
   <div class="tool-output expandable" onclick={toggleExpanded} role="presentation">
     <div class="output-preview">
-      {#if lang}
-        <div class="code-with-gutter">
-          <div class="code-gutter">
-            {#each previewLines as _line, i (i)}<span>{i + 1}</span>{/each}
-          </div>
-          <pre><code class="hljs" data-highlight-pending data-lang={lang}
-              >{previewLines.join('\n')}</code
-            ></pre>
-        </div>
-      {:else}
-        {#each previewLines as line, i (i)}<div>{line}</div>{/each}
-      {/if}
+      {@render outputLines(previewLines)}
       <div class="output-expand-hint">{t('session.toolOutputMore', { n: hiddenCount })}</div>
     </div>
     <div class="output-full">
-      {#if lang}
-        <div class="code-with-gutter">
-          <div class="code-gutter">
-            {#each split.lines as _line, i (i)}<span>{i + 1}</span>{/each}
-          </div>
-          <pre><code class="hljs" data-highlight-pending data-lang={lang}
-              >{split.lines.join('\n')}</code
-            ></pre>
-        </div>
-      {:else}
-        {#each split.lines as line, i (i)}<div>{line}</div>{/each}
-      {/if}
-    </div>
-  </div>
-{:else if lang}
-  <div class="tool-output">
-    <div class="code-with-gutter">
-      <div class="code-gutter">
-        {#each split.lines as _line, i (i)}<span>{i + 1}</span>{/each}
-      </div>
-      <pre><code class="hljs" data-highlight-pending data-lang={lang}>{split.lines.join('\n')}</code
-        ></pre>
+      {@render outputLines(split.lines)}
     </div>
   </div>
 {:else}
   <div class="tool-output">
-    {#each split.lines as line, lineIndex (lineIndex)}<div>{line}</div>{/each}
+    {@render outputLines(split.lines)}
   </div>
 {/if}

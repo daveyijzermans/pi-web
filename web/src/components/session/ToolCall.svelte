@@ -51,9 +51,13 @@
     <div class="tool-header">
       <span class="tool-name">bash</span>
     </div>
-    <div class="tool-command">{#if command === null}<span class="tool-error">[invalid arg]</span
-        >{:else}<code class="hljs" data-highlight-pending data-lang="bash">{command ||
-            '...'}</code>{/if}</div>
+    <div class="tool-command">
+      {#if command === null}<span class="tool-error">[invalid arg]</span>{:else}<code
+          class="hljs"
+          data-highlight-pending
+          data-lang="bash">{command || '...'}</code
+        >{/if}
+    </div>
     {#if result && resultText.trim()}<ToolOutput text={resultText.trim()} />{/if}
   {:else if call.name === 'read'}
     <div class="tool-header">

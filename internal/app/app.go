@@ -84,7 +84,7 @@ func Main(version string) {
 	versionChecker := updater.New(version)
 
 	var srv *server.Server
-	workerSocketDir := filepath.Join(agentDir, "pi-web", "workers")
+	workerSocketDir := agentdir.WorkerSocketDir(agentDir)
 	manager := workers.NewManager(func(sessionID, sessionPath string) (workers.ChatWorker, error) {
 		return rpc.NewSocketWorkerWithStream(sessionID, sessionPath, workerSocketDir, func(preview rpc.StreamPreview) {
 			if srv != nil {

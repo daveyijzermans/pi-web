@@ -40,3 +40,10 @@ func Path() string {
 func WebDir(agentDir string) string {
 	return filepath.Join(agentDir, "pi-web")
 }
+
+// WorkerSocketDir returns the directory where detached worker-holders listen
+// (one unix socket per session). Shared by the app's worker factory and the
+// server's Stop-orphaned-holder path so the two can't drift.
+func WorkerSocketDir(agentDir string) string {
+	return filepath.Join(WebDir(agentDir), "workers")
+}

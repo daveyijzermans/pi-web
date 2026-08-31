@@ -13,12 +13,13 @@ node_modules/
 # Scratch / transient — keep `git status` meaningful
 .tmp/
 .pi/tasks/
+.pi/investigation/
 context.md
 progress.md
 /_*.md
 /*.jsonl
 *.exe~
-e2e/.shots/
+e2e/**/.shots/
 e2e/.tmp-*/
 e2e/scripts/check-inj.mjs
 e2e/scripts/shot-actions.mjs
