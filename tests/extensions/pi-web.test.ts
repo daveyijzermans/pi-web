@@ -179,6 +179,13 @@ describe('token helpers', () => {
     vi.clearAllMocks();
     delete (globalThis as any).__MOCK_PI_WEB_TOKEN__;
     delete (globalThis as any).__MOCK_PI_WEB_ENV_CONTENT__;
+    // readPiWebToken prefers process.env over the (mocked) token file — a dev
+    // shell with PI_WEB_TOKEN exported would bypass every mock below.
+    vi.stubEnv('PI_WEB_TOKEN', '');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('withToken appends token when available', () => {

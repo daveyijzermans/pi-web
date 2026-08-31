@@ -108,12 +108,22 @@ func TestIndexSourceReferencesAPINewSession(t *testing.T) {
 	}
 }
 
-func TestIndexSourceReferencesAPIRecentLocations(t *testing.T) {
-	data, err := os.ReadFile(repoPath("web/src/index/sessions.js"))
+// The new-session dialog sources its location chips from the projects API
+// (mirroring Manage Projects); /api/recent-locations is only consumed by the
+// schedules page now.
+func TestRecentLocationsOnlyUsedBySchedules(t *testing.T) {
+	sessionsSrc, err := os.ReadFile(repoPath("web/src/index/sessions.js"))
 	if err != nil {
 		t.Fatalf("read web/src/index/sessions.js: %v", err)
 	}
-	if !strings.Contains(string(data), "/api/recent-locations") {
-		t.Fatal("web/src/index/sessions.js missing /api/recent-locations reference")
+	if strings.Contains(string(sessionsSrc), "/api/recent-locations") {
+		t.Fatal("web/src/index/sessions.js should not fetch /api/recent-locations (chips mirror /api/projects)")
+	}
+	schedulesSrc, err := os.ReadFile(repoPath("web/src/index/schedules.js"))
+	if err != nil {
+		t.Fatalf("read web/src/index/schedules.js: %v", err)
+	}
+	if !strings.Contains(string(schedulesSrc), "/api/recent-locations") {
+		t.Fatal("web/src/index/schedules.js missing /api/recent-locations reference")
 	}
 }

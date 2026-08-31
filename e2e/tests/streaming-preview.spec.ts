@@ -98,6 +98,42 @@ async function runToolyTurnAndCollect(page): Promise<{ phrase: string; at: numbe
 }
 
 test.describe("streaming preview persistence (stubbed pi)", () => {
+  test("a follow-up prompt renders last — never above stranded reply chunks", async ({
+    page,
+    sessionsDir,
+  }, testInfo) => {
+    await openStubSession(page, sessionsDir, testInfo, "order");
+
+    // First turn: plain streamed reply, wait for it to settle canonically.
+    await page.locator("#pi-chat-message").fill("first question");
+    await page.locator("#pi-chat-send").click();
+    await expect(page.locator("#messages")).toContainText("Stub reply: first question", {
+      timeout: 20_000,
+    });
+
+    // The preview host must fully release the reply once it is canonical.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => document.getElementById("chat-preview-host")?.textContent?.trim() ?? "",
+          ),
+        { timeout: 15_000 },
+      )
+      .toBe("");
+
+    // Second prompt: nothing from the previous reply may sit below/around it.
+    await page.locator("#pi-chat-message").fill("second question");
+    await page.locator("#pi-chat-send").click();
+    const hostText = await page.evaluate(
+      () => document.getElementById("chat-preview-host")?.textContent ?? "",
+    );
+    expect(hostText).not.toContain("Stub reply: first question");
+    await expect(page.locator("#messages")).toContainText("Stub reply: second question", {
+      timeout: 20_000,
+    });
+  });
+
   test("streamed text survives tool-call flushes and reloads", async ({
     page,
     sessionsDir,
