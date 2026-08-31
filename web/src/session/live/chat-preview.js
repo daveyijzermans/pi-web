@@ -263,14 +263,10 @@ function archiveDonePreview(state) {
   state.previewText = '';
 }
 
-// Remove archived preview chunks (and a finished live preview) whose text has
-// arrived as canonical assistant entries. Called from the session reload with
-// the NEW assistant entries of that reload. A live preview without text
-// (waiting / thinking-only) follows the legacy rule: any new assistant entry
-// clears it once it is done (or the worker is no longer running).
-export function reconcilePreviewsWithCanonical(state, entries, { running = () => false } = {}) {
+function collectAssistantTexts(entries) {
   const texts = [];
   for (const entry of entries || []) {
+    if (entry?.message?.role && entry.message.role !== 'assistant') continue;
     const content = entry?.message?.content;
     if (typeof content === 'string') {
       texts.push(content);
@@ -280,11 +276,37 @@ export function reconcilePreviewsWithCanonical(state, entries, { running = () =>
       }
     }
   }
-  if (!texts.length) return;
-  const canonical = (text) => !!text && texts.some((t) => t.includes(text));
+  return texts;
+}
+
+// Remove archived preview chunks (and a finished live preview) whose text has
+// arrived as canonical assistant entries. Called from EVERY session reload:
+//
+//   • `entries` — the NEW assistant entries of this reload. Only these may
+//     clear a live preview that still shows text (e01104e: an OLD entry with
+//     identical text must not vanish text whose own entry hasn't flushed).
+//   • `allEntries` — every assistant entry the model now holds. Archived
+//     chunks match against these too: a chunk's canonical entry can land in a
+//     reload that raced the chunk's archival, after which it is never "new"
+//     again — matching only new entries strands the chunk at the bottom of
+//     the transcript forever.
+//
+// A live preview without text (waiting / thinking-only) clears as soon as it
+// is done or the worker stops: pi flushes the message at message_end — the
+// same moment done fires — so its canonical copy is already on disk and there
+// is no text to protect.
+export function reconcilePreviewsWithCanonical(
+  state,
+  entries,
+  { running = () => false, allEntries = null } = {},
+) {
+  const newTexts = collectAssistantTexts(entries);
+  const settledTexts = allEntries ? collectAssistantTexts(allEntries) : newTexts;
+  const canonicalNew = (text) => !!text && newTexts.some((t) => t.includes(text));
+  const canonicalAny = (text) => !!text && settledTexts.some((t) => t.includes(text));
 
   state.settledPreviews = (state.settledPreviews || []).filter(({ el, text }) => {
-    if (canonical(String(text || '').trim())) {
+    if (canonicalAny(String(text || '').trim())) {
       if (el && el.parentNode) el.parentNode.removeChild(el);
       return false;
     }
@@ -295,7 +317,16 @@ export function reconcilePreviewsWithCanonical(state, entries, { running = () =>
   if (!el) return;
   const done = el.classList.contains('done');
   const shown = String(state.previewText || '').trim();
-  const clearable = shown ? canonical(shown) : done || !running();
+  // Live preview with text: cleared by its own NEW entry while the turn runs
+  // (e01104e — an old identical reply must not vanish streaming text). Once
+  // the preview is done AND the worker idle, its entry is flushed by
+  // definition, so any canonical copy may clear it — without this, a reload
+  // that raced the stream (entry seen before the preview finished) strands
+  // the ENTIRE reply below the transcript, and the next user message renders
+  // sandwiched above it.
+  const clearable = shown
+    ? canonicalNew(shown) || (done && !running() && canonicalAny(shown))
+    : done || !running();
   if (clearable) {
     if (el.parentNode) el.parentNode.removeChild(el);
     state.chatPreviewEl = null;

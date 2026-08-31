@@ -103,6 +103,13 @@
 
     on(windowImpl, 'pi-chat-message-sent', (event) => {
       followScroll.extendPreviewFollow(30000);
+      // Drop any archived preview chunk whose canonical entry already renders
+      // in #messages before appending the pending prompt — otherwise the new
+      // prompt paints ABOVE the previous turn's stale bottom-pinned copy.
+      reconcilePreviewsWithCanonical(CHAT_PREVIEW_STATE, [], {
+        running: () => chatRunning,
+        allEntries: model ? model.entries : [],
+      });
       if (event && event.detail && event.detail.message) {
         renderPendingChat(event.detail.message);
       } else {
@@ -171,12 +178,15 @@
         clearChatPreview,
         clearPendingUser,
         previewText: () => CHAT_PREVIEW_STATE.previewText || '',
-        // Per-message preview teardown: each preview chunk (archived finished
-        // messages + the live one) is removed only when THIS reload delivered
-        // its canonical entry — never because some older entry landed late.
-        onNewAssistantEntries: (newEntries) =>
+        // Per-message preview teardown: live-preview TEXT is cleared only by
+        // the reload that delivered its canonical entry; archived chunks and
+        // textless (thinking-only) previews reconcile against everything the
+        // model holds, every reload, so a raced reload can't strand them at
+        // the bottom of the transcript.
+        onNewAssistantEntries: (newEntries, allEntries) =>
           reconcilePreviewsWithCanonical(CHAT_PREVIEW_STATE, newEntries, {
             running: () => chatRunning,
+            allEntries,
           }),
         // Reactive mode: the Svelte model owns #messages, so no DOM patchers.
         updateStats,

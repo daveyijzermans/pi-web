@@ -269,4 +269,105 @@ describe('chat preview', () => {
     expect(state.chatPreviewEl).toBeNull();
     expect(doc.getElementById('chat-preview-host').textContent).toBe('');
   });
+
+  it('reconcile clears a done thinking-only preview even when the reload carries no new entries', () => {
+    const dom = new JSDOM(
+      '<body><div id="messages"></div><div id="chat-preview-host"></div></body>',
+    );
+    const doc = dom.window.document;
+    const state = {
+      chatPreviewEl: null,
+      pendingUserEl: null,
+      previewText: '',
+      settledPreviews: [],
+    };
+    const opts = { documentImpl: doc, renderMarkdown: (t) => t };
+
+    // Thinking streamed, no answer text; the canonical entry landed in an
+    // EARLIER reload (racing the done event), so this reload has nothing new.
+    renderChatPreview({ content: '', thinking: 'pondering...', done: false }, state, opts);
+    state.chatPreviewEl.classList.add('done');
+    reconcilePreviewsWithCanonical(state, [], { running: () => true, allEntries: [] });
+    expect(state.chatPreviewEl).toBeNull();
+    expect(doc.getElementById('chat-preview-host').textContent).toBe('');
+  });
+
+  it('reconcile frees archived chunks whose entry was seen before archival (allEntries sweep)', () => {
+    const dom = new JSDOM(
+      '<body><div id="messages"></div><div id="chat-preview-host"></div></body>',
+    );
+    const doc = dom.window.document;
+    const state = {
+      chatPreviewEl: null,
+      pendingUserEl: null,
+      previewText: '',
+      settledPreviews: [],
+    };
+    const opts = { documentImpl: doc, renderMarkdown: (t) => t };
+
+    renderChatPreview({ content: 'Stranded.', done: true }, state, opts);
+    renderChatPreview({ content: 'next streaming', done: false }, state, opts);
+    expect(state.settledPreviews.map((p) => p.text)).toEqual(['Stranded.']);
+
+    // No NEW entries this reload, but the model already holds the entry.
+    reconcilePreviewsWithCanonical(state, [], {
+      running: () => true,
+      allEntries: [
+        { message: { role: 'assistant', content: [{ type: 'text', text: 'Stranded.' }] } },
+      ],
+    });
+    expect(state.settledPreviews).toHaveLength(0);
+    // The live text preview stays: only NEW entries may clear shown text.
+    expect(state.previewText).toBe('next streaming');
+  });
+
+  it('reconcile clears a done idle preview via allEntries (entry seen before preview finished)', () => {
+    const dom = new JSDOM(
+      '<body><div id="messages"></div><div id="chat-preview-host"></div></body>',
+    );
+    const doc = dom.window.document;
+    const state = {
+      chatPreviewEl: null,
+      pendingUserEl: null,
+      previewText: '',
+      settledPreviews: [],
+    };
+    const opts = { documentImpl: doc, renderMarkdown: (t) => t };
+
+    // The canonical entry landed mid-stream (already "seen"); the preview
+    // finished afterwards. No reload will ever carry the entry as new again.
+    renderChatPreview({ content: 'The full reply.', done: true }, state, opts);
+    reconcilePreviewsWithCanonical(state, [], {
+      running: () => false,
+      allEntries: [
+        { message: { role: 'assistant', content: [{ type: 'text', text: 'The full reply.' }] } },
+      ],
+    });
+    expect(state.chatPreviewEl).toBeNull();
+    expect(doc.getElementById('chat-preview-host').textContent).toBe('');
+  });
+
+  it('reconcile never clears live preview text on an allEntries-only match (old identical reply)', () => {
+    const dom = new JSDOM(
+      '<body><div id="messages"></div><div id="chat-preview-host"></div></body>',
+    );
+    const doc = dom.window.document;
+    const state = {
+      chatPreviewEl: null,
+      pendingUserEl: null,
+      previewText: '',
+      settledPreviews: [],
+    };
+    const opts = { documentImpl: doc, renderMarkdown: (t) => t };
+
+    // Still RUNNING: an old entry with identical text — not this message's
+    // own entry — must not clear it mid-turn.
+    renderChatPreview({ content: 'Done.', done: true }, state, opts);
+    reconcilePreviewsWithCanonical(state, [], {
+      running: () => true,
+      allEntries: [{ message: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] } }],
+    });
+    expect(state.chatPreviewEl).toBeTruthy();
+    expect(state.previewText).toBe('Done.');
+  });
 });

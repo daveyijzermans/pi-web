@@ -142,6 +142,34 @@ describe('live events', () => {
     expect(clearPendingUser).toHaveBeenCalled();
   });
 
+  it('clears the pending user chip when a bang command lands as bashExecution', async () => {
+    // `!cmd` never produces a user entry — pi writes a bashExecution message.
+    // Without treating that as the canonical echo, the optimistic chip strands
+    // in the preview host below the transcript.
+    const entries = [
+      { id: 'welcome' },
+      {
+        id: 'bash-1',
+        message: { role: 'bashExecution', command: 'src-status', output: 'all clean' },
+      },
+    ];
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ entries }), { status: 200 })),
+    );
+    const entryState = { seen: new Set(['welcome']), liveRendered: new Set() };
+    const clearPendingUser = vi.fn();
+
+    await handleSessionReload({
+      sessionId: 's',
+      fetchImpl,
+      entryState,
+      clearPendingUser,
+      onReloaded: vi.fn(),
+    });
+
+    expect(clearPendingUser).toHaveBeenCalled();
+  });
+
   it('does not clear preview when the new assistant entry is not the previewed message', async () => {
     // pi flushes a message only after its tool-call args finish streaming, so
     // the preview can show text that is not on disk yet while an OLDER

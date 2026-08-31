@@ -97,6 +97,9 @@ export async function handleSessionReload({
   // canonical entry that actually contains it; a preview without text
   // (waiting / thinking-only) keeps the legacy any-assistant-entry behaviour.
   const shownText = String(previewText() || '').trim();
+  const allAssistantEntries = entries.filter(
+    (e) => e?.message?.role === 'assistant' && e.message.content?.length > 0,
+  );
   const newAssistantEntries = newIds
     .map((id) => entries.find((e) => e.id === id))
     .filter((e) => e?.message?.role === 'assistant' && e.message.content?.length > 0);
@@ -112,12 +115,14 @@ export async function handleSessionReload({
     );
   };
   if (typeof onNewAssistantEntries === 'function') {
-    if (newAssistantEntries.length) {
-      if (hasNewMetadata) {
-        _requestAnimationFrame(() => onNewAssistantEntries(newAssistantEntries));
-      } else {
-        onNewAssistantEntries(newAssistantEntries);
-      }
+    // Run the reconcile on EVERY reload, not only when new assistant entries
+    // arrived: a preview whose canonical entry landed in an earlier reload
+    // (racing the done stream event) would otherwise never be re-offered its
+    // entry and strand at the bottom of the transcript.
+    if (hasNewMetadata && newAssistantEntries.length) {
+      _requestAnimationFrame(() => onNewAssistantEntries(newAssistantEntries, allAssistantEntries));
+    } else {
+      onNewAssistantEntries(newAssistantEntries, allAssistantEntries);
     }
   } else if (newAssistantEntries.some(canonicalHasShownText)) {
     if (hasNewMetadata) {
@@ -127,9 +132,13 @@ export async function handleSessionReload({
     }
   }
 
-  const hasNewUserMessage = newIds.some(
-    (id) => entries.find((e) => e.id === id)?.message?.role === 'user',
-  );
+  // A bang command (`!cmd`) never yields a user entry — pi records a
+  // bashExecution message instead — so that entry is the canonical echo that
+  // must clear the optimistic pending chip.
+  const hasNewUserMessage = newIds.some((id) => {
+    const role = entries.find((e) => e.id === id)?.message?.role;
+    return role === 'user' || role === 'bashExecution';
+  });
   if (hasNewUserMessage) {
     if (hasNewMetadata) {
       _requestAnimationFrame(() => clearPendingUser());
