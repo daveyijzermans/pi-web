@@ -131,6 +131,18 @@ func (d *queueDrainer) drainSession(sessionID string) {
 	if status.State == workers.WorkerStateRunning {
 		return
 	}
+	// The in-process worker status is not the whole story: a turn can be
+	// running in a detached worker-holder (this instance restarted mid-turn)
+	// or in a terminal pi. Dispatching into either steers the queued message
+	// into the RUNNING turn instead of starting its own. computeRunningStatus
+	// covers compaction/status-file/worker; hasActiveTerminalTurn is checked
+	// separately because the orphaned-web-turn override reports idle for
+	// restart-orphaned turns — correct for unblocking a USER's fresh send, but
+	// the autonomous drainer must wait: with worker-holders such a turn is
+	// usually still executing, and dispatching into it steers the queued item.
+	if d.server.computeRunningStatus(sessionID) || d.server.hasActiveTerminalTurn(sessionID) {
+		return
+	}
 	// Resolve the on-disk path so chatSender can spawn the worker if needed.
 	resolved, err := sessions.ResolveByID(d.server.sessionsDir, sessionID)
 	if err != nil {

@@ -1,11 +1,13 @@
 package server
 
 import (
+	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"pi-web/internal/chatqueue"
+	"pi-web/internal/sessions"
 	"pi-web/internal/workers"
 )
 
@@ -17,6 +19,7 @@ func newDrainerServer(t *testing.T, sender ChatSender) (*Server, *queueDrainer, 
 		db:          db,
 		chatQueue:   chatqueue.NewStore(db),
 		chatSender:  sender,
+		now:         time.Now,
 	}
 	d := newQueueDrainer(s)
 	s.queueDrainer = d
@@ -93,6 +96,42 @@ func TestDrainerSkipsWhenWorkerBusy(t *testing.T) {
 	}
 
 	// Item must remain queued, waiting for the next idle transition.
+	snap, _ := s.chatQueue.List(id)
+	if len(snap.Items) != 1 {
+		t.Fatalf("expected item to remain queued, got %#v", snap.Items)
+	}
+}
+
+// A turn can be running with NO in-process worker: a detached worker-holder
+// after a server restart, or a terminal pi. The jsonl tail shows the assistant
+// mid-response; dispatching then would steer the queued item into that turn.
+func TestDrainerSkipsWhenHolderOrTerminalTurnActive(t *testing.T) {
+	fake := &fakeSender{sendCh: make(chan struct{}, 1)} // worker status: idle
+	s, d, id := newDrainerServer(t, fake)
+	s.chatQueue.Add(id, "wait for the holder", "wait for the holder")
+
+	// Append a mid-turn tail: the assistant paused to call a tool.
+	resolved, err := sessions.ResolveByID(s.sessionsDir, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := `{"type":"message","id":"a1","message":{"role":"assistant","stopReason":"toolUse","content":[{"type":"toolCall","id":"t1","name":"bash"}]}}` + "\n"
+	f, err := os.OpenFile(resolved.Path, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(entry); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	d.drainSession(id)
+
+	select {
+	case <-fake.sendCh:
+		t.Fatalf("Send should not fire while the jsonl tail shows an active turn")
+	case <-time.After(150 * time.Millisecond):
+	}
 	snap, _ := s.chatQueue.List(id)
 	if len(snap.Items) != 1 {
 		t.Fatalf("expected item to remain queued, got %#v", snap.Items)
