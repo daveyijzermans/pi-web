@@ -29,6 +29,12 @@ const holderShutdownType = "__holder_shutdown"
 // holderInfoType is the first line the holder sends on every attach.
 const holderInfoType = "__holder_info"
 
+// holderReplayEndType marks the end of the queued-while-detached backlog on
+// attach. Everything before it is replay (stale for stream previews — a turn
+// that finished while detached must not re-stream into the browser);
+// everything after is live.
+const holderReplayEndType = "__holder_replay_end"
+
 type holderInfo struct {
 	Type            string `json:"type"`
 	PiPid           int    `json:"piPid"`
@@ -128,7 +134,7 @@ func RunHolder(socketPath string) error {
 
 	// Accept loop: one client at a time; a new attach replaces the old one
 	// (a dead server's conn may linger until its next write fails). An Accept
-	// error must NOT kill pi — it may be mid-turn writing the session file.
+	// error must not kill pi — it may be mid-turn writing the session file.
 	// Back off and retry; if the listener is permanently dead nobody can ever
 	// reattach and the idle self-reaper above ends the process once pi quiets.
 	for {
@@ -182,6 +188,11 @@ func (h *holder) attach(conn net.Conn, piStdin io.Writer) {
 			break
 		}
 		h.queue = h.queue[1:]
+	}
+	if ok {
+		if _, err := conn.Write([]byte(`{"type":"` + holderReplayEndType + `"}` + "\n")); err != nil {
+			ok = false
+		}
 	}
 	if !ok {
 		_ = conn.Close()

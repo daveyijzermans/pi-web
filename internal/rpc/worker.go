@@ -40,6 +40,13 @@ type piRPCWorker struct {
 	lastStreamActivity   atomic.Int64 // unix nanos; stream/turn events keep worker visually running
 	streamSink           StreamEventSink
 	streamPreview        *streamPreviewAccumulator
+	// replaying is true while consuming a holder's queued-while-detached
+	// backlog: those events must update the accumulator and worker status but
+	// not re-broadcast previews — a turn that finished while detached would
+	// otherwise re-stream its whole reply into the browser on reattach. Set
+	// before the consume goroutine starts, cleared by the replay-end marker;
+	// only the consume goroutine touches it after start.
+	replaying bool
 }
 
 func (w *piRPCWorker) touch() {
@@ -537,6 +544,14 @@ func (w *piRPCWorker) handleRPCLine(line string) {
 		w.status = workers.WorkerStatus{State: workers.WorkerStateIdle}
 		w.mu.Unlock()
 		w.lastStreamActivity.Store(0)
+	case holderReplayEndType:
+		// End of the reattach backlog: from here events are live. If a message
+		// is still mid-flight, emit one catch-up snapshot so the browser
+		// preview resumes where the stream left off.
+		w.replaying = false
+		if w.streamSink != nil && w.streamPreview != nil && !w.streamPreview.empty() {
+			w.streamSink(w.streamPreview.snapshot(false))
+		}
 	case "thinking_level_changed":
 		if meta.Level != "" {
 			w.mu.Lock()
@@ -555,6 +570,9 @@ func (w *piRPCWorker) emitStreamPreview(event assistantMessageEvent) {
 		return
 	}
 	if preview, ok := w.streamPreview.handleAssistantEvent(event); ok {
+		if w.replaying {
+			return // accumulator updated; stale replay is never broadcast
+		}
 		w.streamSink(preview)
 	}
 }
@@ -564,6 +582,9 @@ func (w *piRPCWorker) completeStreamPreview() {
 		return
 	}
 	if preview, ok := w.streamPreview.complete(); ok {
+		if w.replaying {
+			return // finished-while-detached turn: swallow, never re-stream
+		}
 		w.streamSink(preview)
 	}
 }

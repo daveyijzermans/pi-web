@@ -403,3 +403,59 @@ func TestProbeIfWedgedSkipsIdleAndActiveWorkers(t *testing.T) {
 		t.Fatalf("skipped probes wrote RPC commands: %q", buf.String())
 	}
 }
+
+// A holder replays its queued-while-detached backlog on reattach. A turn that
+// finished while detached must not re-stream its reply into the browser; a
+// message still mid-flight gets exactly one catch-up snapshot at replay end.
+func TestReplaySuppressesFinishedTurnPreviews(t *testing.T) {
+	var sunk []StreamPreview
+	w := &piRPCWorker{
+		status:        workers.WorkerStatus{State: workers.WorkerStateIdle},
+		pending:       make(map[string]chan response),
+		streamSink:    func(p StreamPreview) { sunk = append(sunk, p) },
+		streamPreview: &streamPreviewAccumulator{},
+	}
+	w.replaying = true
+
+	// Replayed backlog: a complete turn.
+	w.handleRPCLine(`{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"old reply"}}`)
+	w.handleRPCLine(`{"type":"message_update","assistantMessageEvent":{"type":"text_end","content":"old reply"}}`)
+	w.handleRPCLine(`{"type":"agent_end"}`)
+	if len(sunk) != 0 {
+		t.Fatalf("replayed finished turn was broadcast: %+v", sunk)
+	}
+
+	w.handleRPCLine(`{"type":"` + holderReplayEndType + `"}`)
+	if len(sunk) != 0 {
+		t.Fatalf("replay end emitted a catch-up for a finished turn: %+v", sunk)
+	}
+
+	// Live events after the marker stream normally.
+	w.handleRPCLine(`{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"fresh"}}`)
+	if len(sunk) != 1 || sunk[0].Content != "fresh" {
+		t.Fatalf("live event after replay not broadcast, got %+v", sunk)
+	}
+}
+
+func TestReplayEmitsOneCatchUpForMidFlightMessage(t *testing.T) {
+	var sunk []StreamPreview
+	w := &piRPCWorker{
+		status:        workers.WorkerStatus{State: workers.WorkerStateIdle},
+		pending:       make(map[string]chan response),
+		streamSink:    func(p StreamPreview) { sunk = append(sunk, p) },
+		streamPreview: &streamPreviewAccumulator{},
+	}
+	w.replaying = true
+
+	// Replayed backlog ends mid-message: text is streaming, no text_end yet.
+	w.handleRPCLine(`{"type":"message_update","assistantMessageEvent":{"type":"thinking_delta","delta":"hmm "}}`)
+	w.handleRPCLine(`{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"partial ans"}}`)
+	if len(sunk) != 0 {
+		t.Fatalf("replay was broadcast before the marker: %+v", sunk)
+	}
+
+	w.handleRPCLine(`{"type":"` + holderReplayEndType + `"}`)
+	if len(sunk) != 1 || sunk[0].Content != "partial ans" || sunk[0].Thinking != "hmm " || sunk[0].Done {
+		t.Fatalf("expected one catch-up snapshot, got %+v", sunk)
+	}
+}

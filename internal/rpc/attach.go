@@ -89,6 +89,10 @@ func NewSocketWorkerWithStream(sessionID, sessionPath, socketDir string, streamS
 		streamSink:    streamSink,
 		streamPreview: &streamPreviewAccumulator{},
 	}
+	// The holder replays its detached backlog first; suppress preview
+	// broadcasts until its replay-end marker so finished turns don't
+	// re-stream into the browser.
+	worker.replaying = true
 	go worker.consume(eventStream)
 
 	if !info.SessionSwitched {
