@@ -40,7 +40,7 @@ func (s *Server) handleAppShell(w http.ResponseWriter, r *http.Request, bootstra
 // values. The keys mirror the localStorage keys the frontend already uses so
 // the write-through cache maps 1:1. Only keys listed here are accepted by
 // POST /api/settings; everything else is ignored. Genuinely per-window or
-// live-timer state (sidebar widths, focus countdown, tree toggles) is NOT
+// live-timer state (sidebar widths, focus countdown, tree toggles) is not
 // listed here — it stays in localStorage only.
 var settingDefaults = map[string]string{
 	"pi-web-theme":                  "dark",

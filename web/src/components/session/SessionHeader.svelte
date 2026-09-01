@@ -25,7 +25,7 @@
     if (await copyToClipboard(text)) onCopied();
   }
 
-  // Passive "Copied" toast — does NOT mutate the resume button's own text.
+  // Passive "Copied" toast — does not mutate the resume button's own text.
   function showResumeCopiedNotice(command) {
     showToast(t('common.copied'), { id: 'resume-copy-notice', duration: 1200, title: command });
   }

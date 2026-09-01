@@ -35,8 +35,6 @@
     const syncPath = () => {
       const newPath = window.location.pathname;
       const newSearch = window.location.search;
-      const newSessionId = new URLSearchParams(newSearch).get('id') || '';
-      console.log('[App] navigation:', newPath + newSearch, 'sessionId:', newSessionId);
       path = newPath;
       search = newSearch;
     };

@@ -12,7 +12,7 @@ import (
 )
 
 // Review comments are GitHub-style notes a reviewer attaches to a line range of
-// the session's working-tree diff. Like annotations they are NOT session data —
+// the session's working-tree diff. Like annotations they are not session data —
 // they live in the app database keyed by session id and never touch the
 // append-only JSONL.
 const reviewCommentsSchema = `CREATE TABLE IF NOT EXISTS review_comments (

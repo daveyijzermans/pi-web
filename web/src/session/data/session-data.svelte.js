@@ -200,7 +200,7 @@ export class SessionDataModel {
     }
 
     // Out-of-order fetch guard: two reloads can race, and the older response
-    // may land last. If the incoming window overlaps what we have but does NOT
+    // may land last. If the incoming window overlaps what we have but does not
     // contain our newest entry, it predates our state — applying it would make
     // fresh messages vanish until the next reload. Skip it.
     const lastExistingId = existing[existing.length - 1]?.id;

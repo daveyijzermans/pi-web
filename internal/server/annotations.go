@@ -9,7 +9,7 @@ import (
 )
 
 // Annotations are reviewer-authored notes anchored to a span of a rendered
-// session entry (or artifact). They are NOT session data — they live in the
+// session entry (or artifact). They are not session data — they live in the
 // app database, keyed by session id, and never touch the append-only JSONL.
 const annotationsSchema = `CREATE TABLE IF NOT EXISTS annotations (
 	id           TEXT PRIMARY KEY,
