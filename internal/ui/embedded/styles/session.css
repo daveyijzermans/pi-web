@@ -466,9 +466,9 @@
       /* Shared height of the three bottom bars (left tree status, middle git/btw
          action bar, right scratchpad footer) so their top divider lines align. */
       --session-footer-h: calc(34rem / 12);
-      /* Fixed header bar height 2014 every content offset below must use this var so
-         larger interface fonts push content down instead of under the bar. */
-      --session-header-h: calc(52rem / 12); /* scales with the interface font so footer buttons never clip */
+      /* Fixed header bar height — every content offset below must use this var
+         so larger interface fonts push content down instead of under the bar. */
+      --session-header-h: calc(52rem / 12);
     }
 
     * {

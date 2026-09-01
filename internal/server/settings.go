@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"pi-web/internal/ui"
 )
 
 // handleSettingsPage renders the global /settings page through the SPA shell.
@@ -181,14 +183,15 @@ func sanitizeFontSize(value, fallback string) string {
 // FontStyles returns the resolved interface/content/code font stacks and pixel
 // sizes for server-side injection so the page paints with the chosen
 // fonts/sizes before any JS runs.
-func (s *Server) FontStyles() (uiStack, contentStack, codeStack, uiSize, contentSize, codeSize string) {
-	uiStack = resolveFontStack(s.getSetting("pi-web:v1:font-ui", "mono"))
-	contentStack = resolveFontStack(s.getSetting("pi-web:v1:font-content", "mono"))
-	codeStack = resolveFontStack(s.getSetting("pi-web:v1:font-code", "mono"))
-	uiSize = sanitizeFontSize(s.getSetting("pi-web:v1:font-ui-size", "12"), "12")
-	contentSize = sanitizeFontSize(s.getSetting("pi-web:v1:font-content-size", "13"), "13")
-	codeSize = sanitizeFontSize(s.getSetting("pi-web:v1:font-code-size", "12"), "12")
-	return
+func (s *Server) FontStyles() ui.FontStyles {
+	return ui.FontStyles{
+		UIStack:      resolveFontStack(s.getSetting("pi-web:v1:font-ui", "mono")),
+		ContentStack: resolveFontStack(s.getSetting("pi-web:v1:font-content", "mono")),
+		CodeStack:    resolveFontStack(s.getSetting("pi-web:v1:font-code", "mono")),
+		UISize:       sanitizeFontSize(s.getSetting("pi-web:v1:font-ui-size", "12"), "12"),
+		ContentSize:  sanitizeFontSize(s.getSetting("pi-web:v1:font-content-size", "13"), "13"),
+		CodeSize:     sanitizeFontSize(s.getSetting("pi-web:v1:font-code-size", "12"), "12"),
+	}
 }
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {

@@ -12,7 +12,8 @@
 
 /* Anchor rem to the interface font size so every rem-based font-size and
    line-height in the page CSS scales with the setting. The default (12px)
-   keeps all metrics pixel-identical to the pre-rem stylesheets. */
+   keeps all metrics pixel-identical to the pre-rem stylesheets; the recurring
+   calc(Nrem / 12) idiom means "N px at the 12px default". */
 html {
     font-size: var(--font-size-ui, 12px);
 }

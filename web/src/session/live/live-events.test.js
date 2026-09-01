@@ -143,9 +143,8 @@ describe('live events', () => {
   });
 
   it('clears the pending user chip when a bang command lands as bashExecution', async () => {
-    // `!cmd` never produces a user entry — pi writes a bashExecution message.
-    // Without treating that as the canonical echo, the optimistic chip strands
-    // in the preview host below the transcript.
+    // `!cmd` yields a bashExecution entry, not a user entry; it must still
+    // clear the optimistic pending chip.
     const entries = [
       { id: 'welcome' },
       {

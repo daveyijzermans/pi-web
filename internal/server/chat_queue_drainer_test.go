@@ -102,9 +102,8 @@ func TestDrainerSkipsWhenWorkerBusy(t *testing.T) {
 	}
 }
 
-// A turn can be running with NO in-process worker: a detached worker-holder
-// after a server restart, or a terminal pi. The jsonl tail shows the assistant
-// mid-response; dispatching then would steer the queued item into that turn.
+// A turn running without an in-process worker (detached holder, terminal pi)
+// must still block the drainer: the jsonl tail shows the assistant mid-turn.
 func TestDrainerSkipsWhenHolderOrTerminalTurnActive(t *testing.T) {
 	fake := &fakeSender{sendCh: make(chan struct{}, 1)} // worker status: idle
 	s, d, id := newDrainerServer(t, fake)

@@ -1,12 +1,10 @@
 import { test, expect } from "../lib/test";
 import { buildSession, realWorkingDir, uniqueSessionName, writeSession } from "../lib/sessions";
 
-// Manage Projects dialog. Regression guard for the filter-off dimming: with
-// the master "Filter projects" toggle OFF, only the controls it gates (the
-// per-project enable checkboxes and Select all) may dim — the project names
-// and the delete/remove action buttons stay fully opaque and enabled, because
-// those actions work regardless of the filter. This has regressed before:
-// dimming the whole list made working buttons look disabled.
+// Regression guard: with the master "Filter projects" toggle off, only the
+// controls it gates (per-project enable checkboxes, Select all) may dim —
+// names and delete/remove actions work regardless of the filter and must not
+// look disabled.
 test.describe("manage projects dialog", () => {
   test("filter off dims only the filter controls, never names or actions", async ({
     page,

@@ -55,17 +55,16 @@
     onSaved();
   }
 
+  const SIZE_SETTINGS = {
+    ui: { key: uiSizeKey, apply: 'uiSize' },
+    content: { key: contentSizeKey, apply: 'contentSize' },
+    code: { key: codeSizeKey, apply: 'codeSize' },
+  };
+
   function commitSize(kind, value) {
-    const key = kind === 'ui' ? uiSizeKey : kind === 'code' ? codeSizeKey : contentSizeKey;
+    const { key, apply } = SIZE_SETTINGS[kind];
     onSave(key, value);
-    applyFonts(
-      document,
-      kind === 'ui'
-        ? { uiSize: value }
-        : kind === 'code'
-          ? { codeSize: value }
-          : { contentSize: value },
-    );
+    applyFonts(document, { [apply]: value });
   }
 
   function commitFont(kind, value) {

@@ -28,20 +28,36 @@ func SetThemeProvider(fn func() string) {
 
 const defaultMonoStack = "ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace"
 
-// fontProvider returns the resolved CSS font-family stacks and pixel sizes for
+// FontStyles holds the resolved CSS font-family stacks and pixel sizes for
 // the interface (--font-sans / --font-size-ui), content (--font-content /
-// --font-content-size) and code (--font-code / --font-code-size). Injected
-// into the shell so the page paints with the chosen fonts/sizes before any JS
-// runs. Defaults to the monospace stack; app wiring overrides it via
-// SetFontProvider to read the DB.
-var fontProvider = func() (uiStack, contentStack, codeStack, uiSize, contentSize, codeSize string) {
-	return defaultMonoStack, defaultMonoStack, defaultMonoStack, "12", "13", "12"
+// --font-content-size) and code (--font-code / --font-code-size) surfaces.
+type FontStyles struct {
+	UIStack      string
+	ContentStack string
+	CodeStack    string
+	UISize       string
+	ContentSize  string
+	CodeSize     string
+}
+
+// fontProvider supplies the FontStyles injected into the shell so the page
+// paints with the chosen fonts/sizes before any JS runs. Defaults to the
+// monospace stack; app wiring overrides it via SetFontProvider to read the DB.
+var fontProvider = func() FontStyles {
+	return FontStyles{
+		UIStack:      defaultMonoStack,
+		ContentStack: defaultMonoStack,
+		CodeStack:    defaultMonoStack,
+		UISize:       "12",
+		ContentSize:  "13",
+		CodeSize:     "12",
+	}
 }
 
 // SetFontProvider installs the function used to resolve the current
 // server-backed interface/content/code font stacks and sizes for server-side
 // injection.
-func SetFontProvider(fn func() (string, string, string, string, string, string)) {
+func SetFontProvider(fn func() FontStyles) {
 	if fn != nil {
 		fontProvider = fn
 	}
@@ -137,19 +153,19 @@ func renderLiveDocumentStart(data liveDocumentData) string {
 		b.WriteByte('\n')
 	}
 	b.WriteString("<link rel=\"stylesheet\" href=\"/custom-themes.css\">\n")
-	fontUI, fontContent, fontCode, fontUISize, fontContentSize, fontCodeSize := fontProvider()
+	fonts := fontProvider()
 	b.WriteString("<style id=\"pi-web-fonts\">:root{--font-sans:")
-	b.WriteString(fontUI)
+	b.WriteString(fonts.UIStack)
 	b.WriteString(";--font-content:")
-	b.WriteString(fontContent)
+	b.WriteString(fonts.ContentStack)
 	b.WriteString(";--font-code:")
-	b.WriteString(fontCode)
+	b.WriteString(fonts.CodeStack)
 	b.WriteString(";--font-size-ui:")
-	b.WriteString(fontUISize)
+	b.WriteString(fonts.UISize)
 	b.WriteString("px;--font-content-size:")
-	b.WriteString(fontContentSize)
+	b.WriteString(fonts.ContentSize)
 	b.WriteString("px;--font-code-size:")
-	b.WriteString(fontCodeSize)
+	b.WriteString(fonts.CodeSize)
 	b.WriteString("px;}</style>\n")
 	// After the stylesheets so the parser-blocking script can read the custom
 	// theme's --body-bg from the now-loaded /custom-themes.css (see comment on

@@ -115,10 +115,9 @@ export async function handleSessionReload({
     );
   };
   if (typeof onNewAssistantEntries === 'function') {
-    // Run the reconcile on EVERY reload, not only when new assistant entries
-    // arrived: a preview whose canonical entry landed in an earlier reload
-    // (racing the done stream event) would otherwise never be re-offered its
-    // entry and strand at the bottom of the transcript.
+    // Reconcile on every reload, not only when new assistant entries arrived:
+    // a preview whose canonical entry landed in an earlier reload would
+    // otherwise strand at the bottom of the transcript.
     if (hasNewMetadata && newAssistantEntries.length) {
       _requestAnimationFrame(() => onNewAssistantEntries(newAssistantEntries, allAssistantEntries));
     } else {
@@ -132,9 +131,8 @@ export async function handleSessionReload({
     }
   }
 
-  // A bang command (`!cmd`) never yields a user entry — pi records a
-  // bashExecution message instead — so that entry is the canonical echo that
-  // must clear the optimistic pending chip.
+  // A bang command (`!cmd`) yields a bashExecution entry instead of a user
+  // entry; either is the canonical echo that clears the pending chip.
   const hasNewUserMessage = newIds.some((id) => {
     const role = entries.find((e) => e.id === id)?.message?.role;
     return role === 'user' || role === 'bashExecution';

@@ -57,14 +57,11 @@ export function setupSessionLiveConnection({
       CustomEventImpl: windowImpl.CustomEvent,
     });
     reconnectAttempt = 0;
-    // Re-sync the queue panel on every (re)connection: a server restart drops
-    // the SSE stream, and any 'queue' event broadcast while the browser was
-    // reconnecting (e.g. the drainer dispatching on startup) is gone forever —
-    // without this the panel shows already-dispatched items indefinitely.
+    // Re-sync the queue panel on every (re)connection: queue events broadcast
+    // while the browser was reconnecting are gone forever, leaving the panel
+    // showing already-dispatched items.
     if (windowImpl.CustomEvent) {
-      try {
-        windowImpl.dispatchEvent(new windowImpl.CustomEvent('pi-queue-event'));
-      } catch (_) {}
+      windowImpl.dispatchEvent(new windowImpl.CustomEvent('pi-queue-event'));
     }
     return eventSource;
   }
