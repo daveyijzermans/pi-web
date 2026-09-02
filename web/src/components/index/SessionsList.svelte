@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { icon, ChevronDown, Info, Archive } from '../../shared/icons.js';
+  import { icon, ChevronDown, Info, Archive, Plus } from '../../shared/icons.js';
   import { t } from '../../shared/i18n.js';
   import {
     activityMs,
@@ -276,7 +276,7 @@
             title={t('index.newSessionInProject')}
             onclick={() => onNewSession && onNewSession(group.project)}
           >
-            +
+            {@html icon(Plus, { size: 16 })}
           </button>
         </div>
         <div class="session-grid">

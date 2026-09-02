@@ -1,5 +1,6 @@
 <script>
   import { onMount, tick } from 'svelte';
+  import { icon, Plus } from '../shared/icons.js';
   import CommandPalette from '../components/shared/CommandPalette.svelte';
   import HomeMenu from '../components/index/HomeMenu.svelte';
   import IndexHeader from '../components/index/IndexHeader.svelte';
@@ -357,6 +358,7 @@
   onManageProjects={openProjectsModal}
 />
 
+<!-- eslint-disable svelte/no-at-html-tags -- trusted: Lucide icon SVG from icons.js -->
 <button
   class="new-session-btn new-session-btn-mobile"
   id="newSessionBtn"
@@ -364,7 +366,7 @@
   data-new-session-btn
   aria-label={t('index.startNewSession')}
   title={t('index.newSession')}
-  onclick={openNewSessionModal}>+</button
+  onclick={openNewSessionModal}>{@html icon(Plus, { size: 26 })}</button
 >
 
 <CommandPalette

@@ -1,5 +1,6 @@
 <script>
   import { t } from '../../shared/i18n.js';
+  import { icon, ArrowLeft } from '../../shared/icons.js';
   import DirectoryBrowser from './DirectoryBrowser.svelte';
 
   let {
@@ -26,6 +27,7 @@
   }
 </script>
 
+<!-- eslint-disable svelte/no-at-html-tags -- trusted: Lucide icon SVG from icons.js -->
 <div
   class="modal-overlay"
   id="modalOverlay"
@@ -46,7 +48,7 @@
         aria-label={t('index.closeNewSession')}
         onclick={onClose}
       >
-        <span aria-hidden="true">←</span>
+        <span aria-hidden="true">{@html icon(ArrowLeft, { size: 14 })}</span>
         <span>{t('index.startNewSession')}</span>
       </button>
     </div>

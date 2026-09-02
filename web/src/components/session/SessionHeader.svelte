@@ -1,6 +1,15 @@
 <script>
   import { onMount } from 'svelte';
-  import { icon, PanelLeft, Plus, SquarePen, MoreHorizontal } from '../../shared/icons.js';
+  import {
+    icon,
+    ArrowLeft,
+    Command,
+    PanelLeft,
+    Plus,
+    Slash,
+    SquarePen,
+    MoreHorizontal,
+  } from '../../shared/icons.js';
   import { t } from '../../shared/i18n.js';
   import { navigate } from '../../shared/navigation.js';
   import { showToast } from '../../shared/toast.js';
@@ -95,7 +104,9 @@
 
 <div class="session-header-bar">
   <div class="session-header-left">
-    <a href="/" class="session-header-back"><span>←</span> {t('session.back')}</a>
+    <a href="/" class="session-header-back"
+      ><span>{@html icon(ArrowLeft, { size: 14 })}</span> <span>{t('session.back')}</span></a
+    >
     <button
       id="tree-toggle"
       class="session-header-actions session-header-tree-toggle"
@@ -118,7 +129,8 @@
     <button
       id="shortcuts-help-btn"
       class="session-header-shortcuts-help"
-      title={`${t('session.shortcuts')} (⌘/)`}>⌘/</button
+      title={`${t('session.shortcuts')} (⌘/)`}
+      >{@html icon(Command, { size: 12 })}{@html icon(Slash, { size: 12 })}</button
     >
     <button
       id="toggle-right-sidebar-btn"

@@ -11,6 +11,7 @@
   import {
     icon,
     CalendarClock,
+    ArrowLeft,
     Clock,
     ExternalLink,
     ListTree,
@@ -330,7 +331,7 @@
       onclick={(e) => {
         e.preventDefault();
         navigate('/');
-      }}><span>←</span> {t('session.back')}</a
+      }}><span>{@html icon(ArrowLeft, { size: 14 })}</span> <span>{t('session.back')}</span></a
     >
   </div>
   <span class="session-header-title">{t('schedules.title')}</span>

@@ -29,6 +29,15 @@ textarea {
     font-size: inherit;
 }
 
+/* Every icon (icons.js and the boot-script theme icons) is an inline SVG with
+   aria-hidden. The inline default (baseline) parks the icon's bottom edge on
+   the text baseline, so icons next to text ride visibly high; middle centers
+   them on the x-height. Flex/grid children ignore vertical-align, so aligned
+   containers are unaffected. */
+svg[aria-hidden='true'] {
+    vertical-align: middle;
+}
+
 :root {
     --font-sans: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
     /* Font for rendered message content; falls back to the interface font and

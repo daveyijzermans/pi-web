@@ -173,7 +173,10 @@ a { color: inherit; }
     overflow: hidden;
 }
 .layout-toggle button {
-    height: calc(28rem / 12);
+    /* The wrapper's 1px border wraps these; subtract it so the segmented
+       control's total height matches .schedules-nav-btn (28rem/12 with its
+       own border, border-box). */
+    height: calc(28rem / 12 - 2px);
     padding: 0 10px;
     border: 0;
     border-right: 1px solid color-mix(in srgb, var(--dim) 76%, transparent);
@@ -298,9 +301,6 @@ a { color: inherit; }
     align-items: center;
     gap: 12px;
     cursor: pointer;
-    padding: 0 0 9px;
-    margin-bottom: 12px;
-    border-bottom: 1px solid color-mix(in srgb, var(--dim) 34%, transparent);
     -webkit-tap-highlight-color: transparent;
 }
 .project-toggle:focus-visible {
@@ -308,8 +308,10 @@ a { color: inherit; }
     outline-offset: 4px;
 }
 .project-chevron {
-    width: 10px;
-    height: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
     color: var(--muted);
     transform: rotate(90deg);
     transition: transform 0.15s;
@@ -351,10 +353,16 @@ a { color: inherit; }
 }
 
 /* Per-project "New Session" button — sits beside the toggle in the project row */
+/* The underline box lives on the header, not the toggle: with it on the
+   toggle, the sibling icon buttons centered on the toggle's taller margin box
+   and sat ~10px below the text line. */
 .project-header {
     display: flex;
     align-items: center;
     gap: 6px;
+    padding: 0 0 9px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--dim) 34%, transparent);
 }
 .project-new-btn {
     all: unset;
@@ -1118,8 +1126,14 @@ body.modal-sheet-open { overflow: hidden; }
         transform: scale(0.97);
     }
     .modal-sheet-back span:first-child {
+        display: inline-flex;
+        align-items: center;
         color: var(--muted);
-        font-size: calc(14rem / 12);
+    }
+    /* Ink-trim the label so flex centering matches the arrow icon regardless
+       of the interface font's line-box asymmetry (see session.css). */
+    .modal-sheet-back span:last-child {
+        text-box: trim-both cap alphabetic;
     }
     .modal h2 { display: none; }
     .modal input {

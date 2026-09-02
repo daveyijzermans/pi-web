@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { icon, ArrowLeft } from '../shared/icons.js';
   import AboutSettings from '../components/settings/AboutSettings.svelte';
   import AppearanceSettings from '../components/settings/AppearanceSettings.svelte';
   import ArtifactSettings from '../components/settings/ArtifactSettings.svelte';
@@ -131,17 +132,18 @@
   });
 </script>
 
+<!-- eslint-disable svelte/no-at-html-tags -- trusted: Lucide icon SVG from icons.js -->
 <div class="session-header-bar">
   <div class="session-header-left">
     {#if isMobile && mobileShowingPane}
       <button type="button" class="session-header-back" onclick={backToList}>
-        <span>←</span>
-        {t('settings.title')}
+        <span>{@html icon(ArrowLeft, { size: 14 })}</span>
+        <span>{t('settings.title')}</span>
       </button>
     {:else}
       <a class="session-header-back" href="/" onclick={onHomeBack}>
-        <span>←</span>
-        {cameFromApp ? t('common.back') : t('session.back')}
+        <span>{@html icon(ArrowLeft, { size: 14 })}</span>
+        <span>{cameFromApp ? t('common.back') : t('session.back')}</span>
       </a>
     {/if}
   </div>

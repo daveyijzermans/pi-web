@@ -2721,9 +2721,10 @@
       color: var(--text);
     }
 
-    .session-header-back span {
+    .session-header-back span:first-of-type {
+      display: inline-flex;
+      align-items: center;
       color: var(--muted);
-      font-size: calc(14rem / 12);
     }
 
     .session-header-title {
@@ -2745,9 +2746,11 @@
       flex-shrink: 0;
     }
 
+    /* Same control height as .session-header-new / .session-header-shortcuts-help
+       — mismatched heights read as misaligned once hover/active paints the box. */
     .session-header-actions {
-      width: calc(32rem / 12);
-      height: calc(32rem / 12);
+      width: calc(24rem / 12);
+      height: calc(24rem / 12);
       padding: 0;
       font-size: calc(20rem / 12);
       line-height: 1;
@@ -2791,9 +2794,15 @@
       transition: opacity 0.12s;
     }
 
-    .session-header-new span[aria-hidden] {
-      font-size: calc(14rem / 12);
-      line-height: 1;
+    /* Trim the label's line box to its glyph ink (cap height to baseline) so
+       flex centering centers the VISIBLE text against the icon regardless of
+       the interface font's ascent/descent asymmetry (system fonts like Segoe
+       are ascent-heavy and push text ~2px above the box center). Browsers
+       without text-box support keep plain box centering. */
+    .session-header-new-label,
+    .session-header-back span:last-of-type,
+    .pi-sheet-back span:last-child {
+      text-box: trim-both cap alphabetic;
     }
 
     .session-header-new:hover,
@@ -2818,6 +2827,7 @@
     .session-header-shortcuts-help {
       height: calc(24rem / 12);
       padding: 0 7px;
+      gap: 1px;
       font-size: calc(11rem / 12);
       font-weight: 500;
       font-family: inherit;
@@ -4986,7 +4996,7 @@
 
     .pi-chat-icon-button { width: calc(27rem / 12); padding: 0; flex-shrink: 0; }
     .pi-chat-photo-button { display: inline-flex; align-items: center; justify-content: center; }
-    .pi-chat-photo-button svg { width: calc(15rem / 12); height: calc(15rem / 12); fill: currentColor; }
+    .pi-chat-photo-button svg { width: calc(15rem / 12); height: calc(15rem / 12); }
     .pi-chat-send {
       padding: 4px 14px;
       height: calc(26rem / 12);
@@ -5798,8 +5808,9 @@
       transition: opacity 0.15s;
     }
     .pi-sheet-back span:first-child {
+      display: inline-flex;
+      align-items: center;
       color: var(--muted);
-      font-size: calc(14rem / 12);
       flex-shrink: 0;
     }
     .pi-sheet-back span:last-child {
