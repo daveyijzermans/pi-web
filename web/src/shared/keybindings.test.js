@@ -6,6 +6,7 @@ import {
   comboMatchesEvent,
   expectedEventKey,
   matchesAction,
+  formatShortcut,
 } from './keybindings.js';
 
 const ev = (key, mods = {}) => ({
@@ -143,5 +144,19 @@ describe('registry integrity', () => {
       expect(a.category).toBeTruthy();
       expect(defaultCombo(a.id)).toBe(a.combo);
     }
+  });
+});
+
+describe('formatShortcut', () => {
+  it('keeps mac symbols on mac', () => {
+    expect(formatShortcut('⌘K', { isMac: true })).toBe('⌘K');
+    expect(formatShortcut('⌘⇧N', { isMac: true })).toBe('⌘⇧N');
+  });
+
+  it('spells out modifiers elsewhere', () => {
+    expect(formatShortcut('⌘K', { isMac: false })).toBe('Ctrl+K');
+    expect(formatShortcut('⌘,', { isMac: false })).toBe('Ctrl+,');
+    expect(formatShortcut('⌘⇧N', { isMac: false })).toBe('Ctrl+Shift+N');
+    expect(formatShortcut('⇧I', { isMac: false })).toBe('Shift+I');
   });
 });

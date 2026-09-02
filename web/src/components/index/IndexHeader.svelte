@@ -1,6 +1,7 @@
 <script>
   import { icon, MoreHorizontal, CalendarClock } from '../../shared/icons.js';
   import { t } from '../../shared/i18n.js';
+  import { formatShortcut } from '../../shared/keybindings.js';
 
   let {
     layout = 'timeline',
@@ -27,7 +28,8 @@
           type="button"
           aria-haspopup="dialog"
           aria-controls="sessionPalette"
-          onclick={onSearch}><span>{t('index.searchSessions')}</span><kbd>⌘K</kbd></button
+          onclick={onSearch}
+          ><span>{t('index.searchSessions')}</span><kbd>{formatShortcut('⌘K')}</kbd></button
         >
         <button
           class="nav-menu-btn"

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { icon, CircleHelp, Maximize2, X } from '../../shared/icons.js';
   import { t } from '../../shared/i18n.js';
+  import { formatShortcut } from '../../shared/keybindings.js';
   import ArtifactPanel from './ArtifactPanel.svelte';
   import AnnotationLayer from './AnnotationLayer.svelte';
   import { sessionRuntime } from '../../session/session-runtime.js';
@@ -329,7 +330,7 @@
       <button
         id="close-right-sidebar"
         class="right-sidebar-btn"
-        title={`${t('sidebar.hidePanel')} (⌘⇧N)`}
+        title={`${t('sidebar.hidePanel')} (${formatShortcut('⌘⇧N')})`}
         onclick={collapseSidebar}>{@html icon(X, { size: 15 })}</button
       >
     </div>

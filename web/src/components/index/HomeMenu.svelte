@@ -1,5 +1,6 @@
 <script>
   import { t } from '../../shared/i18n.js';
+  import { formatShortcut } from '../../shared/keybindings.js';
   import {
     icon,
     SquarePen,
@@ -113,7 +114,7 @@
       }}
       ><span class="menu-item-label"
         >{@html icon(Settings, { size: 15 })}{t('common.settings')}</span
-      ><kbd>⌘,</kbd></a
+      ><kbd>{formatShortcut('⌘,')}</kbd></a
     >
     <button
       class="web-menu-item"

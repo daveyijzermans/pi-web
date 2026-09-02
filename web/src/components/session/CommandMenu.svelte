@@ -6,6 +6,7 @@
   import { onMount } from 'svelte';
   import CommandPalette from '../shared/CommandPalette.svelte';
   import { t } from '../../shared/i18n.js';
+  import { formatShortcut } from '../../shared/keybindings.js';
   import {
     icon,
     Search,
@@ -283,7 +284,8 @@
   <div class={sectionClass}>
     {#each primaryItems as item (item.action)}
       <button class={itemClass} type="button" data-action={item.action}
-        >{@render label(item)}{#if desktop && item.kbd}<kbd>{item.kbd}</kbd>{/if}</button
+        >{@render label(item)}{#if desktop && item.kbd}<kbd>{formatShortcut(item.kbd)}</kbd
+          >{/if}</button
       >
     {/each}
   </div>
@@ -297,7 +299,8 @@
             role="menuitem"
             target={item.external ? '_blank' : undefined}
             rel={item.external ? 'noreferrer' : undefined}
-            >{@render label(item)}{#if desktop && item.kbd}<kbd>{item.kbd}</kbd>{/if}</a
+            >{@render label(item)}{#if desktop && item.kbd}<kbd>{formatShortcut(item.kbd)}</kbd
+              >{/if}</a
           >
         {:else if item.kind === 'version'}
           <button

@@ -131,3 +131,15 @@ export function matchesAction(actionId, event, bindings = {}) {
   if (comboMatchesEvent(combo, event)) return true;
   return (action.aliases || []).some((alias) => comboMatchesEvent(alias, event));
 }
+
+const IS_MAC =
+  typeof navigator !== 'undefined' &&
+  /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent || '');
+
+// Display form of a shortcut hint: on non-Apple platforms the ⌘/⇧ symbols are
+// both wrong (the key is Ctrl) and rendered from a fallback symbol font with
+// mismatched metrics, so spell the modifiers out.
+export function formatShortcut(label, { isMac = IS_MAC } = {}) {
+  if (isMac) return label;
+  return label.replace('⌘⇧', 'Ctrl+Shift+').replace('⌘', 'Ctrl+').replace('⇧', 'Shift+');
+}

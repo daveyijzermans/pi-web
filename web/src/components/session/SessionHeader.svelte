@@ -11,6 +11,7 @@
     MoreHorizontal,
   } from '../../shared/icons.js';
   import { t } from '../../shared/i18n.js';
+  import { formatShortcut } from '../../shared/keybindings.js';
   import { navigate } from '../../shared/navigation.js';
   import { showToast } from '../../shared/toast.js';
   import { copyToClipboard } from '../../shared/clipboard.js';
@@ -120,7 +121,7 @@
     <button
       id="new-session-header-btn"
       class="session-header-new"
-      title={`${t('index.newSession')} (⌘T)`}
+      title={`${t('index.newSession')} (${formatShortcut('⌘T')})`}
       aria-label={t('session.newSession')}
       >{@html icon(Plus, { size: 14 })}<span class="session-header-new-label"
         >{t('session.new')}</span
@@ -129,13 +130,13 @@
     <button
       id="shortcuts-help-btn"
       class="session-header-shortcuts-help"
-      title={`${t('session.shortcuts')} (⌘/)`}
+      title={`${t('session.shortcuts')} (${formatShortcut('⌘/')})`}
       >{@html icon(Command, { size: 12 })}{@html icon(Slash, { size: 12 })}</button
     >
     <button
       id="toggle-right-sidebar-btn"
       class="session-header-actions"
-      title={`${t('session.toggleScratchpad')} (⌘⇧N)`}
+      title={`${t('session.toggleScratchpad')} (${formatShortcut('⌘⇧N')})`}
       aria-label={t('session.toggleScratchpad')}>{@html icon(SquarePen, { size: 14 })}</button
     >
     <button
