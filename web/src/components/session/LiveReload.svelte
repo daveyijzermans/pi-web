@@ -32,6 +32,7 @@
   import { sessionRuntime } from '../../session/session-runtime.js';
   import { getSessionRuntime } from '../../session/session-runtime-context.js';
   import { setSessionTitle } from '../../session/session-title.svelte.js';
+  import { setSessionArchived } from '../../session/session-archived.svelte.js';
   import { chatRunningStore } from './chat/chat-toolbar-state.svelte.js';
 
   onMount(() => {
@@ -194,6 +195,7 @@
         showFollowButton,
         onReloaded: (data) => {
           reconcileEntries(data.entries);
+          if (typeof data.archived === 'boolean') setSessionArchived(data.archived);
         },
         onNewEntries: highlightNewEntries,
       }).catch((err) => {

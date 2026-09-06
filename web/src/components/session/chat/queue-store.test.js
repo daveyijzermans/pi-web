@@ -66,7 +66,7 @@ describe('QueueStore (server-backed)', () => {
     store.pushSteer({ text: 'first-steer' });
     const added = await store.enqueueQueued({ message: 'hi', displayText: 'hi' });
     expect(added).toMatchObject({ kind: 'queued', text: 'hi' });
-    expect(api.add).toHaveBeenCalledWith('hi', 'hi');
+    expect(api.add).toHaveBeenCalledWith('hi', 'hi', { files: [], notBefore: '' });
     // The queued row is inserted before the steer.
     expect(store.items.map((i) => i.kind)).toEqual(['queued', 'steer']);
   });

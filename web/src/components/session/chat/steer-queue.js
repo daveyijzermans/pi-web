@@ -6,14 +6,18 @@
 //     so pi folds it into the active turn. The steer row in the panel is
 //     browser-local and disappears either when the user dismisses it or when
 //     the run completes.
-//   - Queue: enqueueing goes through POST /api/chat/queue; the autonomous
-//     server-side drainer dispatches items to the worker when it becomes idle
-//     (or via a kick from the queue API). The browser is just a viewer onto
-//     the server-side queue, kept in sync by SSE 'queue' events.
-//   - sendNow / edit: both pull a queued row out of the server queue (DELETE)
-//     before acting on it locally — send via /api/chat (sendNow) or put back
-//     into the textarea (edit). That way the server doesn't try to dispatch
-//     a row we've already taken over.
+//   - Queue: enqueueing goes through POST /api/chat/queue (multipart when the
+//     composer holds files, so uploads land on the server right away); the
+//     autonomous server-side drainer dispatches items to the worker when it
+//     becomes idle (or via a kick from the queue API). The browser is just a
+//     viewer onto the server-side queue, kept in sync by SSE 'queue' events.
+//   - Send later: same enqueue with a notBefore timestamp; the drainer holds
+//     the row until it is due.
+//   - sendNow: POST /api/chat/queue/send pops the row server-side and
+//     dispatches it immediately (steering if a run is active), so stored
+//     images travel with it.
+//   - edit: pulls the row out of the server queue (DELETE) and puts the text
+//     back into the textarea; server-side uploads are not restored.
 //
 // `activeRun` is driven solely by the `pi-chat-message-sent` (-> true) and
 // `pi-worker-done` (-> false) events, so the first message of a run is never
@@ -43,7 +47,7 @@ export function setupSteerQueue({
     if (queueButton) queueButton.disabled = !hasContent();
   }
 
-  function enqueueFromComposer() {
+  function enqueueFromComposer(event, { notBefore = '' } = {}) {
     const typed = textarea ? textarea.value.trim() : '';
     const message = attachments.composeMessage(typed);
     const files = (attachments.files?.() || []).slice();
@@ -57,21 +61,34 @@ export function setupSteerQueue({
     updateSendEnabled();
     updateQueueEnabled();
     if (textarea && typeof textarea.focus === 'function') textarea.focus();
-    void store.enqueueQueued({ message, displayText: typed, files });
+    void store.enqueueQueued({ message, displayText: typed, files, notBefore });
     return true;
+  }
+
+  function enqueueLater(notBefore) {
+    if (!notBefore) return false;
+    return enqueueFromComposer(null, { notBefore });
   }
 
   async function sendNow(id) {
     const focused = store.items.find((it) => it.id === id);
     if (!focused || focused.kind !== 'queued') return;
-    // Pull from the server first so the drainer doesn't race us.
-    if (queueApi && Number.isInteger(focused.position)) {
+    if (queueApi?.sendNow && Number.isInteger(focused.position)) {
+      // Pop server-side first so a concurrent snapshot refresh can't put the
+      // row back; then drop it locally and surface the in-flight steer chip.
       try {
-        await queueApi.remove(focused.position);
+        await queueApi.sendNow(focused.position);
       } catch {
-        /* best-effort — proceed even if the server-side delete fails */
+        void store.refresh?.();
+        return;
       }
+      store.takeLocalById(id);
+      windowImpl.dispatchEvent(
+        new CustomEvent('pi-chat-message-sent', { detail: { message: focused.text } }),
+      );
+      return;
     }
+    // No server queue: send from the browser.
     store.takeLocalById(id);
     void sendChatMessage(focused.text, focused.files || []);
   }
@@ -195,6 +212,8 @@ export function setupSteerQueue({
   store.actions.sendNow = sendNow;
   store.actions.edit = edit;
   store.actions.resume = resume;
+  store.actions.enqueueLater = enqueueLater;
+  store.actions.hasComposerContent = hasContent;
 
   queueButton?.addEventListener('click', enqueueFromComposer);
   textarea?.addEventListener('input', updateQueueEnabled);
@@ -206,6 +225,7 @@ export function setupSteerQueue({
 
   return {
     enqueueFromComposer,
+    enqueueLater,
     sendNow,
     edit,
     resume,

@@ -19,6 +19,7 @@ import (
 	"pi-web/internal/agentdir"
 	"pi-web/internal/auth"
 	"pi-web/internal/chatqueue"
+	"pi-web/internal/planusage"
 	"pi-web/internal/render"
 	"pi-web/internal/rpc"
 	"pi-web/internal/schedules"
@@ -104,6 +105,7 @@ type Server struct {
 	db                    *sql.DB
 	schedules             *schedules.Store
 	chatQueue             *chatqueue.Store
+	planUsage             *planusage.Service
 	queueDrainer          *queueDrainer
 	updater               *updater.Checker
 	runInstall            func(ctx context.Context) error
@@ -186,6 +188,7 @@ func New(deps Deps) (*Server, error) {
 		db:                    db,
 		schedules:             schedules.NewStore(db),
 		chatQueue:             chatqueue.NewStore(db),
+		planUsage:             planusage.NewService(filepath.Join(agentDir, "auth.json"), planusage.NewAnthropic()),
 		updater:               deps.Updater,
 		runInstall:            deps.RunInstall,
 		runRestart:            deps.RunRestart,
@@ -299,6 +302,10 @@ func initDB(agentDir string) (*sql.DB, error) {
 			return nil, fmt.Errorf("create %s: %w", s.name, err)
 		}
 	}
+	if err := chatqueue.MigrateItems(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	migrateLegacyBtwSession(db)
 	return db, nil
 }
@@ -363,6 +370,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/set-model", s.auth.Wrap(s.handleSetModel))
 	mux.HandleFunc("/api/set-thinking-level", s.auth.Wrap(s.handleSetThinkingLevel))
 	mux.HandleFunc("/api/models", s.auth.Wrap(s.handleAvailableModels))
+	mux.HandleFunc("/api/plan-usage", s.auth.Wrap(s.handlePlanUsage))
 	mux.HandleFunc("/api/worker-status", s.auth.Wrap(s.handleWorkerStatus))
 	mux.HandleFunc("/api/commands", s.auth.Wrap(s.handleCommands))
 	mux.HandleFunc("/share", s.auth.Wrap(s.handleShare))
@@ -396,6 +404,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/custom-themes.css", s.handleCustomThemes)
 	mux.HandleFunc("/api/scratchpad", s.getPostHandler(s.handleGetScratchpad, s.handleSaveScratchpad))
 	mux.HandleFunc("/api/chat/queue", s.auth.Wrap(s.handleChatQueue))
+	mux.HandleFunc("/api/chat/queue/send", s.auth.Wrap(s.handleChatQueueSend))
 	mux.HandleFunc("/api/annotations", s.auth.Wrap(s.handleAnnotations))
 	mux.HandleFunc("/api/settings", s.getPostHandler(s.handleGetSettings, s.handleSaveSettings))
 	mux.HandleFunc("/api/btw", s.auth.Wrap(s.handleGetBtw))

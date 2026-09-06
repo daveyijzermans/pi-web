@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"pi-web/internal/sessions"
 )
@@ -183,4 +184,26 @@ func writeSessionWithCWD(t *testing.T, dir, name, cwd string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func TestHandleApiSessions_ArchivedFilter(t *testing.T) {
+	s := newSessionsServer(t)
+	dir := filepath.Join(s.sessionsDir, "sub")
+	for i := 0; i < 3; i++ {
+		writeSessionWithCWD(t, dir, "s"+strconv.Itoa(i)+".jsonl", "/home/user/project")
+	}
+	archivedPath := writeSessionWithCWD(t, dir, "archived.jsonl", "/home/user/project")
+	if err := sessions.ArchiveSession(archivedPath, true, func() time.Time { return time.Unix(1778025602, 0).UTC() }); err != nil {
+		t.Fatal(err)
+	}
+
+	if count, total := getSessions(t, s, "/api/sessions"); count != 4 || total != 4 {
+		t.Fatalf("unfiltered: count=%d total=%d, want 4/4", count, total)
+	}
+	if count, total := getSessions(t, s, "/api/sessions?archived=0"); count != 3 || total != 3 {
+		t.Fatalf("archived=0: count=%d total=%d, want 3/3", count, total)
+	}
+	if count, total := getSessions(t, s, "/api/sessions?archived=1&limit=1"); count != 1 || total != 1 {
+		t.Fatalf("archived=1: count=%d total=%d, want 1/1", count, total)
+	}
 }

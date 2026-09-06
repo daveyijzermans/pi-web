@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"pi-web/internal/chat"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -171,5 +173,132 @@ func TestRemoveMissingIsNoop(t *testing.T) {
 	s := newTestStore(t)
 	if err := s.Remove("sess", 99); err != nil {
 		t.Fatalf("remove missing should be no-op, got %v", err)
+	}
+}
+
+func TestAddItemRoundtripsImagesAttachmentsAndNotBefore(t *testing.T) {
+	s := newTestStore(t)
+	due := s.Now().Add(time.Hour)
+	added, err := s.AddItem("sess", NewItem{
+		Message:     "look",
+		Images:      []chat.Image{{Type: "image", Data: "AAAA", MimeType: "image/png"}},
+		Attachments: []string{"shot.png"},
+		NotBefore:   &due,
+	})
+	if err != nil {
+		t.Fatalf("AddItem: %v", err)
+	}
+	if added.ImageCount != 1 || added.NotBefore == nil || !added.NotBefore.Equal(due) {
+		t.Fatalf("unexpected added item: %#v", added)
+	}
+	snap, err := s.List("sess")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := snap.Items[0]
+	if len(got.Images) != 1 || got.Images[0].Data != "AAAA" || got.Images[0].MimeType != "image/png" {
+		t.Fatalf("images not persisted: %#v", got.Images)
+	}
+	if len(got.Attachments) != 1 || got.Attachments[0] != "shot.png" {
+		t.Fatalf("attachments not persisted: %#v", got.Attachments)
+	}
+	if got.NotBefore == nil || !got.NotBefore.Equal(due) {
+		t.Fatalf("not_before not persisted: %v", got.NotBefore)
+	}
+	if got.ImageCount != 1 {
+		t.Fatalf("ImageCount=%d", got.ImageCount)
+	}
+}
+
+func TestAddItemAllowsImageOnly(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.AddItem("sess", NewItem{Images: []chat.Image{{Type: "image", Data: "x", MimeType: "image/png"}}}); err != nil {
+		t.Fatalf("image-only item should be accepted: %v", err)
+	}
+}
+
+func TestNotBeforeHoldsItemUntilDue(t *testing.T) {
+	s := newTestStore(t)
+	base := s.Now()
+	later := base.Add(30 * time.Minute)
+	if _, err := s.AddItem("sess", NewItem{Message: "scheduled", NotBefore: &later}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Add("sess", "immediate", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Only the immediate item is due: it must skip ahead of the scheduled one.
+	ids, _ := s.SessionsWithItems()
+	if len(ids) != 1 {
+		t.Fatalf("session with a due item should be listed, got %v", ids)
+	}
+	item, ok, err := s.PopHead("sess")
+	if err != nil || !ok || item.Message != "immediate" {
+		t.Fatalf("PopHead = %#v ok=%v err=%v; want immediate", item, ok, err)
+	}
+	if _, ok, _ := s.PopHead("sess"); ok {
+		t.Fatalf("scheduled item must not pop before it is due")
+	}
+	ids, _ = s.SessionsWithItems()
+	if len(ids) != 0 {
+		t.Fatalf("no due items → no sessions, got %v", ids)
+	}
+
+	// Time passes → the scheduled item becomes due.
+	s.Now = func() time.Time { return later.Add(time.Second) }
+	ids, _ = s.SessionsWithItems()
+	if len(ids) != 1 {
+		t.Fatalf("due session should be listed, got %v", ids)
+	}
+	item, ok, _ = s.PopHead("sess")
+	if !ok || item.Message != "scheduled" {
+		t.Fatalf("PopHead after due = %#v ok=%v", item, ok)
+	}
+}
+
+func TestSetNotBeforeClearsSchedule(t *testing.T) {
+	s := newTestStore(t)
+	later := s.Now().Add(time.Hour)
+	added, err := s.AddItem("sess", NewItem{Message: "scheduled", NotBefore: &later})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetNotBefore("sess", added.Position, nil); err != nil {
+		t.Fatal(err)
+	}
+	item, ok, _ := s.PopHead("sess")
+	if !ok || item.NotBefore != nil {
+		t.Fatalf("cleared schedule should be due immediately: %#v ok=%v", item, ok)
+	}
+}
+
+func TestMigrateItemsIsIdempotent(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	db.SetMaxOpenConns(1)
+	legacy := `CREATE TABLE chat_queue_items (
+		session_id TEXT NOT NULL, position INTEGER NOT NULL, message TEXT NOT NULL,
+		display_text TEXT NOT NULL, created_at DATETIME NOT NULL, PRIMARY KEY (session_id, position))`
+	if _, err := db.Exec(legacy); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(StateTableDDL); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := MigrateItems(db); err != nil {
+			t.Fatalf("migrate run %d: %v", i, err)
+		}
+	}
+	s := NewStore(db)
+	if _, err := s.Add("sess", "hello", ""); err != nil {
+		t.Fatalf("Add after migration: %v", err)
+	}
+	if snap, err := s.List("sess"); err != nil || len(snap.Items) != 1 {
+		t.Fatalf("List after migration: %v %#v", err, snap)
 	}
 }

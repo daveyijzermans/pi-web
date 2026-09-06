@@ -497,4 +497,48 @@ test.describe("steer / queue (stubbed pi)", () => {
     });
     await expect(page.locator(".pi-queue-item")).toHaveCount(0);
   });
+
+  test("send later queues a scheduled row that the server holds until due", async ({
+    page,
+    sessionsDir,
+  }, testInfo) => {
+    const cwd = realWorkingDir();
+    const id = writeSession(
+      sessionsDir,
+      uniqueSessionName(testInfo, "send-later"),
+      buildSession({ cwd }).entries,
+    );
+    await collapseScratchpad(page);
+    await page.goto(`/session?id=${encodeURIComponent(id)}`);
+    await expect(page.locator("#pi-chat-composer")).toHaveAttribute(
+      "data-chat-available",
+      "true",
+    );
+
+    const text = `later-${testInfo.workerIndex}-${Date.now()}`;
+    await page.locator("#pi-chat-message").fill(text);
+    await page.locator("#pi-chat-send-later").click();
+    const dialog = page.getByRole("dialog", { name: "Send later" });
+    await expect(dialog).toBeVisible();
+    // Far enough out that the drainer never fires during the test.
+    await dialog.locator("input[type=datetime-local]").fill("2035-01-02T03:04");
+    await dialog.getByRole("button", { name: "Schedule" }).click();
+
+    const row = page.locator(".pi-queue-item:not(.pi-queue-item--steer)").filter({ hasText: text });
+    await expect(row).toHaveCount(1, { timeout: 15000 });
+    await expect(row.locator(".pi-queue-item-scheduled")).toBeVisible();
+    // Still held server-side: the message has not been sent.
+    await page.waitForTimeout(1500);
+    await expect(page.locator("#messages")).not.toContainText(`Stub reply: ${text}`);
+
+    // Enter on the focused row = send now → the server pops and dispatches it.
+    // (Playwright's fill("") presses Delete, which the panel maps to "remove",
+    // so only focus the already-empty textarea.)
+    await page.locator("#pi-chat-message").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#messages")).toContainText(`Stub reply: ${text}`, {
+      timeout: 20000,
+    });
+    await expect(row).toHaveCount(0);
+  });
 });

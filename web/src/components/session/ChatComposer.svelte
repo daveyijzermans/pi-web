@@ -139,7 +139,7 @@
     ></textarea>
     <div id="pi-chat-attachments" class="pi-chat-attachments"></div>
     <ChatSelectorPopups />
-    <ChatToolbar {chatAvailable} {toolbar} {modelLabel} />
+    <ChatToolbar {chatAvailable} {toolbar} {modelLabel} {queueStore} />
     <ContextUsage popover />
   </div>
   <TextAttachmentModal />

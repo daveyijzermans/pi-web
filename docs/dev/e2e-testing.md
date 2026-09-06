@@ -131,7 +131,9 @@ may differ from earlier versions. Each skip carries a reason string, visible wit
 2. Creates a temp `PI_CODING_AGENT_DIR` and copies `e2e/fixtures/sessions/` into it.
 3. Picks a free port and starts `pi-web -host 127.0.0.1` (the `-host` flag skips
    Tailscale auto-serve; auth is disabled).
-4. Inherits the environment PATH; workers spawn the real `pi` binary.
+4. Inherits the environment PATH (with the stub `pi` prepended) but pins
+   `PI_WEB_TOKEN` and `PI_WEB_DEV` to empty — dev mode would disable the queue
+   drainer and scheduler the steer/queue specs depend on.
 5. Writes `{ baseURL, sessionsDir, agentDir, pid }` to `e2e/.tmp/server.json`.
 
 The base fixture in `e2e/lib/test.ts` reads that file to set each test's

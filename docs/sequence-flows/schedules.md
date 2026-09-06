@@ -75,6 +75,13 @@ the chat workers and SSE broadcast.
      │                │                  │                 │   web push ──▶ browser
 ```
 
+## Scheduling a turn inside an existing session
+
+Schedules always create a fresh session. To fire one prompt into an *existing*
+session at a chosen time, use the chat queue's `notBefore` instead (composer
+"Send later"); see [chat.md](./chat.md#9-queue-send-later-and-steer). It reuses
+the queue drainer rather than this scheduler.
+
 ## Manual / Run-now
 
 A schedule with an empty `cron_expr` never fires on the timer. Any schedule can

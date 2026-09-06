@@ -186,6 +186,9 @@ func (s *Server) handleApiSessions(w http.ResponseWriter, r *http.Request) {
 	if query := strings.TrimSpace(q.Get("q")); query != "" {
 		summaries = filterSummariesByQuery(summaries, query)
 	}
+	if archived := q.Get("archived"); archived == "0" || archived == "1" {
+		summaries = filterSummariesByArchived(summaries, archived == "1")
+	}
 
 	sessions.SortSummariesByActivity(summaries)
 
@@ -208,6 +211,19 @@ func filterSummariesByQuery(summaries []sessions.SessionSummary, query string) [
 		}
 		haystack := strings.ToLower(strings.Join([]string{sum.Name, sum.Project, model, sum.SessionUUID}, " "))
 		if strings.Contains(haystack, q) {
+			out = append(out, sum)
+		}
+	}
+	return out
+}
+
+// filterSummariesByArchived keeps only archived (or only active) summaries.
+// Used by the session sidebar so archived rows don't interleave with the
+// paginated active list.
+func filterSummariesByArchived(summaries []sessions.SessionSummary, archived bool) []sessions.SessionSummary {
+	out := make([]sessions.SessionSummary, 0, len(summaries))
+	for _, sum := range summaries {
+		if sum.Archived == archived {
 			out = append(out, sum)
 		}
 	}
@@ -298,6 +314,7 @@ func sessionResponseMap(session sessions.Session, entries []map[string]any, tota
 		"from":               from,
 		"chatAvailable":      session.ChatAvailable,
 		"chatDisabledReason": session.ChatDisabledReason,
+		"archived":           session.Archived,
 		"model":              session.Model,
 		"modelProvider":      session.ModelProvider,
 	}

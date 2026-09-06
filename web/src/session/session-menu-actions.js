@@ -26,6 +26,17 @@ export async function deleteSession(sessionId, { fetchImpl = fetch } = {}) {
   return data;
 }
 
+export async function archiveSession(sessionId, archived, { fetchImpl = fetch } = {}) {
+  const res = await fetchImpl(sessionUrl('/api/archive-session', sessionId), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ archived }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'archive failed');
+  return data;
+}
+
 // Fetches fresh entries — the in-memory model is stale after a live reload.
 export async function loadForkEntries(sessionId, { fetchImpl = fetch } = {}) {
   const res = await fetchImpl(sessionUrl('/api/session', sessionId));

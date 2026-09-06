@@ -72,24 +72,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	sessionID := resolved.Session.ID
 	sessionPath := resolved.Path
 
-	// Save uploaded files and append reference lines to the message
-	if len(chatReq.Files) > 0 {
-		uploadDir := filepath.Join(agentdir.WebDir(s.agentDir), "chat-uploads", sessionID)
-		saved, err := chat.SaveUploads(uploadDir, chatReq.Files)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "save uploads failed for %s: %v\n", sessionID, err)
-			writeJSONError(w, http.StatusInternalServerError, "failed to save uploaded file")
-			return
-		}
-		var lines []string
-		for _, s := range saved {
-			lines = append(lines, chat.AttachmentLine(s))
-		}
-		if chatReq.Message != "" {
-			chatReq.Message += "\n\n" + strings.Join(lines, "\n")
-		} else {
-			chatReq.Message = strings.Join(lines, "\n")
-		}
+	if _, err := s.saveChatUploads(sessionID, &chatReq); err != nil {
+		fmt.Fprintf(os.Stderr, "save uploads failed for %s: %v\n", sessionID, err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to save uploaded file")
+		return
 	}
 
 	s.markWebTurnActive(sessionID)
@@ -102,6 +88,34 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true, "status": "queued"})
+}
+
+// saveChatUploads writes every uploaded file under the session's chat-uploads
+// dir and appends the attachment reference lines to the message, so pi can read
+// the files from disk. Returns the saved filenames (for queue display). Shared
+// by the immediate /api/chat path and the queue POST, which stores the
+// rewritten message and dispatches it later.
+func (s *Server) saveChatUploads(sessionID string, chatReq *chat.Request) ([]string, error) {
+	if len(chatReq.Files) == 0 {
+		return nil, nil
+	}
+	uploadDir := filepath.Join(agentdir.WebDir(s.agentDir), "chat-uploads", sessionID)
+	saved, err := chat.SaveUploads(uploadDir, chatReq.Files)
+	if err != nil {
+		return nil, err
+	}
+	lines := make([]string, 0, len(saved))
+	names := make([]string, 0, len(saved))
+	for _, up := range saved {
+		lines = append(lines, chat.AttachmentLine(up))
+		names = append(names, filepath.Base(up.Path))
+	}
+	if chatReq.Message != "" {
+		chatReq.Message += "\n\n" + strings.Join(lines, "\n")
+	} else {
+		chatReq.Message = strings.Join(lines, "\n")
+	}
+	return names, nil
 }
 
 // recentSessionActivityWindow is the grace period after a JSONL write during

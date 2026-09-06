@@ -23,6 +23,8 @@
     Send,
     Settings,
     Tag,
+    Archive,
+    ArchiveRestore,
   } from '../../shared/icons.js';
   import * as sidebarApi from '../../session/ui/sidebar.js';
   import { openVersionModal } from '../../shared/version.js';
@@ -32,7 +34,9 @@
   import { showToast } from '../../shared/toast.js';
   import { sessionTitle, setSessionTitle } from '../../session/session-title.svelte.js';
   import { USER_DOCS_URL, TELEGRAM_INVITE_URL } from '../../shared/links.js';
+  import { sessionArchived, setSessionArchived } from '../../session/session-archived.svelte.js';
   import {
+    archiveSession,
     cloneSession,
     deleteSession,
     forkSession,
@@ -49,18 +53,21 @@
 
   // Primary actions shared by the desktop popover and mobile panel. kbd hints
   // render on desktop only.
-  const primaryItems = [
+  const primaryItems = $derived([
     { action: 'list-sessions', icon: Search, label: 'menu.searchSessions', kbd: '⌘K' },
     { action: 'rename', icon: Pencil, label: 'menu.rename' },
     { action: 'share', icon: Share2, label: 'menu.share' },
     { action: 'fork', icon: GitFork, label: 'menu.fork' },
     { action: 'clone', icon: Copy, label: 'menu.clone' },
+    sessionArchived.value
+      ? { action: 'archive', icon: ArchiveRestore, label: 'menu.unarchive' }
+      : { action: 'archive', icon: Archive, label: 'menu.archive' },
     { action: 'delete', icon: Trash2, label: 'menu.delete' },
     { action: 'terminal', icon: Terminal, label: 'menu.resumeTerminal' },
     { action: 'tree', icon: ListTree, label: 'menu.tree', kbd: '⌘B' },
     { action: 'diff', icon: FileDiff, label: 'menu.diff' },
     { action: 'model-usage', icon: ChartColumn, label: 'menu.modelUsage' },
-  ];
+  ]);
 
   // Footer links/rows. desktopOnly items (the version row) are dropped on mobile.
   const footerItems = [
@@ -203,6 +210,21 @@
               else toast(data.error || t('menu.cloneFailed'));
             })
             .catch(() => toast(t('menu.cloneFailed')));
+          break;
+        }
+        case 'archive': {
+          closeMenu();
+          const next = !sessionArchived.value;
+          archiveSession(sessionId, next)
+            .then((data) => {
+              const archived = data?.archived ?? next;
+              setSessionArchived(archived);
+              window.dispatchEvent(
+                new CustomEvent('pi-session-archived', { detail: { sessionId, archived } }),
+              );
+              toast(t(archived ? 'menu.archived' : 'menu.unarchived'));
+            })
+            .catch(() => toast(t('menu.archiveFailed')));
           break;
         }
         case 'delete': {

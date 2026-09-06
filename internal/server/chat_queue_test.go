@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"pi-web/internal/chatqueue"
 
@@ -53,7 +56,7 @@ func writeQueueTestSession(t *testing.T, sessionsDir string) string {
 func newQueueServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	db := newQueueTestDB(t)
-	s := &Server{sessionsDir: t.TempDir(), db: db, chatQueue: chatqueue.NewStore(db)}
+	s := &Server{sessionsDir: t.TempDir(), agentDir: t.TempDir(), db: db, chatQueue: chatqueue.NewStore(db)}
 	id := writeQueueTestSession(t, s.sessionsDir)
 	return s, id
 }
@@ -193,5 +196,85 @@ func TestChatQueueRejectsMissingPositionOnDelete(t *testing.T) {
 	s.handleChatQueue(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("want 400, got %d", w.Code)
+	}
+}
+
+// 1x1 transparent PNG — small but a real image so DetectContentType says image/png.
+var tinyPNG = []byte{
+	0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+	0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+	0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+	0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+	0x42, 0x60, 0x82,
+}
+
+func TestChatQueueMultipartPostStoresImagesAndSchedule(t *testing.T) {
+	s, id := newQueueServer(t)
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	_ = mw.WriteField("message", "look at this")
+	_ = mw.WriteField("displayText", "look at this")
+	_ = mw.WriteField("notBefore", "2030-01-02T03:04:05Z")
+	part, _ := mw.CreateFormFile("images", "shot.png")
+	_, _ = part.Write(tinyPNG)
+	_ = mw.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/chat/queue?id="+id, &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	w := httptest.NewRecorder()
+	s.handleChatQueue(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("POST: code=%d body=%s", w.Code, w.Body.String())
+	}
+	var item chatqueue.Item
+	if err := json.Unmarshal(w.Body.Bytes(), &item); err != nil {
+		t.Fatal(err)
+	}
+	if item.ImageCount != 1 || len(item.Attachments) != 1 || !strings.HasSuffix(item.Attachments[0], ".png") {
+		t.Fatalf("unexpected item: %#v", item)
+	}
+	if item.NotBefore == nil || !item.NotBefore.Equal(time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC)) {
+		t.Fatalf("notBefore not parsed: %v", item.NotBefore)
+	}
+	if !strings.Contains(item.Message, "shot") {
+		t.Fatalf("message should carry the attachment line, got %q", item.Message)
+	}
+	// The stored row keeps the inline image for the drainer.
+	snap, _ := s.chatQueue.List(id)
+	if len(snap.Items) != 1 || len(snap.Items[0].Images) != 1 || snap.Items[0].Images[0].MimeType != "image/png" {
+		t.Fatalf("stored images: %#v", snap.Items)
+	}
+}
+
+func TestChatQueueJSONPostRejectsBadNotBefore(t *testing.T) {
+	s, id := newQueueServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/chat/queue?id="+id,
+		strings.NewReader(`{"message":"hi","notBefore":"tomorrow"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.handleChatQueue(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestChatQueuePatchReschedulesItem(t *testing.T) {
+	s, id := newQueueServer(t)
+	later := time.Now().Add(time.Hour).UTC()
+	item, err := s.chatQueue.AddItem(id, chatqueue.NewItem{Message: "later", NotBefore: &later})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := `{"position":` + strconv.FormatInt(item.Position, 10) + `,"notBefore":""}`
+	req := httptest.NewRequest(http.MethodPatch, "/api/chat/queue?id="+id, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.handleChatQueue(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("PATCH: code=%d body=%s", w.Code, w.Body.String())
+	}
+	snap, _ := s.chatQueue.List(id)
+	if len(snap.Items) != 1 || snap.Items[0].NotBefore != nil {
+		t.Fatalf("schedule should be cleared: %#v", snap.Items)
 	}
 }

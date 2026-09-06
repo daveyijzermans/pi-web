@@ -199,3 +199,10 @@ describe('session-page-data', () => {
     expect(state.title).toBe('Fetched');
   });
 });
+
+describe('buildSessionPageState archived flag', () => {
+  it('carries archived from the payload and defaults to false', () => {
+    expect(buildSessionPageState({ sessionId: 's', data: { archived: true } }).archived).toBe(true);
+    expect(buildSessionPageState({ sessionId: 's', data: {} }).archived).toBe(false);
+  });
+});

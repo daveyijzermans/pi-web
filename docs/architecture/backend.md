@@ -35,6 +35,11 @@ pi-web/
 │   │   └── auth.go             # Token-based HTTP middleware
 │   ├── chat/
 │   │   └── request.go          # Multipart chat request parser (text + images)
+│   ├── chatqueue/
+│   │   └── chatqueue.go        # SQLite per-session queue: items (text, inline images, not_before) + paused flag
+│   ├── planusage/
+│   │   ├── planusage.go        # Provider-neutral subscription rate-limit windows (cache + backoff)
+│   │   └── anthropic.go        # Anthropic OAuth usage adapter (reads pi's stored token)
 │   ├── files/
 │   │   └── files.go            # Bounded read-only dir listing for @mention autocomplete
 │   ├── render/
@@ -253,8 +258,11 @@ type piRPCWorker struct {
 | `/settings` | GET | `handleSettingsPage` | Render SPA shell for the settings route |
 | `/login` | GET | `handleAppShell` | Render SPA shell for the login route |
 | `/api/session` | GET | `handleApiSession` | JSON session data |
-| `/api/sessions` | GET | `handleApiSessions` | JSON list of session summaries |
+| `/api/sessions` | GET | `handleApiSessions` | JSON list of session summaries (`?project=`, `?q=`, `?archived=0|1`, `?limit=&offset=`) |
 | `/api/chat` | POST | `handleChat` | Send chat message (multipart) |
+| `/api/chat/queue` | GET/POST/DELETE/PATCH | `handleChatQueue` | Per-session server-side queue: list / add (JSON or multipart, optional `notBefore`) / remove / pause or reschedule |
+| `/api/chat/queue/send` | POST | `handleChatQueueSend` | Pop one queued item and dispatch it now (`{position}`) |
+| `/api/plan-usage` | GET | `handlePlanUsage` | Subscription rate-limit windows per OAuth provider (cached) |
 | `/api/chat/cancel` | POST | `handleCancelChat` | Abort running chat worker |
 | `/api/set-model` | POST | `handleSetModel` | Change model for session |
 | `/api/set-thinking-level` | POST | `handleSetThinkingLevel` | Change thinking level |

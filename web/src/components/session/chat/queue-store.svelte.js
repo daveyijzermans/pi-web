@@ -23,6 +23,8 @@ export class QueueStore {
     sendNow: () => {},
     edit: () => {},
     resume: () => {},
+    enqueueLater: () => false,
+    hasComposerContent: () => false,
   };
 
   #api = null;
@@ -81,17 +83,23 @@ export class QueueStore {
   #mergeServerSnapshot(snapshot) {
     const serverItems = Array.isArray(snapshot?.items) ? snapshot.items : [];
     const steers = this.items.filter((item) => item.kind === 'steer');
-    const queued = serverItems.map((entry) => ({
-      id: `q-${entry.position}`,
-      kind: 'queued',
-      position: entry.position,
-      text: String(entry.message ?? ''),
-      displayText: String(entry.displayText ?? entry.message ?? ''),
-      files: [],
-    }));
+    const queued = serverItems.map((entry) => this.#fromServer(entry));
     this.items = [...queued, ...steers];
     this.paused = !!snapshot?.paused;
     this.#clampFocus();
+  }
+
+  #fromServer(entry, fallback = {}) {
+    return {
+      id: `q-${entry.position}`,
+      kind: 'queued',
+      position: entry.position,
+      text: String(entry.message ?? fallback.message ?? ''),
+      displayText: String(entry.displayText ?? fallback.displayText ?? entry.message ?? ''),
+      attachments: Array.isArray(entry.attachments) ? entry.attachments : [],
+      imageCount: Number(entry.imageCount) || 0,
+      notBefore: entry.notBefore || null,
+    };
   }
 
   // ── Mutations (queued items go through the API) ───────────────────────────
@@ -101,22 +109,29 @@ export class QueueStore {
    *  — refresh's in-flight-promise coalescing would otherwise hand us back a
    *  snapshot taken *before* our insert if another refresh was already
    *  in-flight (very easy to hit during rapid double-queue clicks). */
-  enqueueQueued = async ({ message, displayText } = {}) => {
+  enqueueQueued = async ({ message, displayText, files = [], notBefore = '' } = {}) => {
     if (!this.#api) return null;
     try {
-      const item = await this.#api.add(message, displayText);
+      const item = await this.#api.add(message, displayText, { files, notBefore });
       const snapshot = await this.#api.list();
       this.#mergeServerSnapshot(snapshot);
-      return {
-        id: `q-${item.position}`,
-        kind: 'queued',
-        position: item.position,
-        text: String(item.message ?? message ?? ''),
-        displayText: String(item.displayText ?? displayText ?? message ?? ''),
-      };
+      return this.#fromServer(item, { message, displayText });
     } catch {
       return null;
     }
+  };
+
+  /** Change (or clear, with '') a queued item's not-before time. */
+  reschedule = async (id, notBefore) => {
+    const item = this.items.find((entry) => entry.id === id);
+    if (!item || item.kind !== 'queued' || !this.#api) return false;
+    item.notBefore = notBefore || null;
+    try {
+      await this.#api.reschedule(item.position, notBefore || '');
+    } catch {
+      /* SSE refresh reconciles. */
+    }
+    return true;
   };
 
   /** Push a transient steer chip (browser-only, never persisted). */

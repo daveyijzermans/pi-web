@@ -1,7 +1,17 @@
 <script>
   import { onMount } from 'svelte';
-  import { icon, Play, Pause, X, CornerDownRight, Layers } from '../../../shared/icons.js';
+  import {
+    icon,
+    Play,
+    Pause,
+    X,
+    CornerDownRight,
+    Layers,
+    CalendarClock,
+    Paperclip,
+  } from '../../../shared/icons.js';
   import { t } from '../../../shared/i18n.js';
+  import { formatResetTime } from './plan-usage.js';
 
   let { store } = $props();
 
@@ -221,6 +231,25 @@
           <span class="pi-queue-item-text">{chipText(item)}</span>
           {#if item.kind === 'steer'}
             <span class="pi-queue-item-tag">{t('composer.steerTag')}</span>
+          {/if}
+          {#if item.kind === 'queued' && (item.attachments?.length || item.imageCount)}
+            <span
+              class="pi-queue-item-tag pi-queue-item-attachments"
+              title={(item.attachments || []).join('\n')}
+              aria-label={t('composer.attachmentCount', {
+                count: item.attachments?.length || item.imageCount,
+              })}
+              >{@html icon(Paperclip, { size: 11 })}{item.attachments?.length ||
+                item.imageCount}</span
+            >
+          {/if}
+          {#if item.kind === 'queued' && item.notBefore}
+            <span
+              class="pi-queue-item-tag pi-queue-item-scheduled"
+              title={t('composer.scheduledFor', {
+                time: new Date(item.notBefore).toLocaleString(),
+              })}>{@html icon(CalendarClock, { size: 11 })}{formatResetTime(item.notBefore)}</span
+            >
           {/if}
           <button
             type="button"

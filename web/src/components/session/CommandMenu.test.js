@@ -5,6 +5,7 @@ import CommandMenu from './CommandMenu.svelte';
 import { sessionModals, resetSessionModals } from '../../session/session-modals.svelte.js';
 import { setSessionPaletteApi } from '../../shared/command-palette-runtime.js';
 import { sessionTitle } from '../../session/session-title.svelte.js';
+import { sessionArchived } from '../../session/session-archived.svelte.js';
 
 // The menu button (#command-menu-btn) lives in SessionHeader; the menu reads it
 // by id, so the test provides it. The session name now flows through the shared
@@ -15,6 +16,7 @@ beforeEach(() => {
   btn.id = 'command-menu-btn';
   document.body.appendChild(btn);
   sessionTitle.name = 'Old';
+  sessionArchived.value = false;
   window.matchMedia = vi.fn(() => ({ matches: false }));
 });
 
@@ -26,6 +28,32 @@ afterEach(() => {
 });
 
 describe('CommandMenu', () => {
+  it('toggles archive via the API and flips the menu label', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ ok: true, archived: true }), { status: 200 }),
+        ),
+      ),
+    );
+    render(CommandMenu, { props: { sessionId: 'session.jsonl' } });
+    await tick();
+
+    const item = document.querySelector('#command-menu-popover [data-action="archive"]');
+    expect(item.textContent).toContain('Archive');
+    await fireEvent.click(item);
+    await waitFor(() => expect(sessionArchived.value).toBe(true));
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/archive-session?id=session.jsonl',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ archived: true }) }),
+    );
+    await tick();
+    expect(
+      document.querySelector('#command-menu-popover [data-action="archive"]').textContent,
+    ).toContain('Restore from archive');
+  });
+
   it('renames via the API and updates the page title', async () => {
     vi.stubGlobal(
       'fetch',

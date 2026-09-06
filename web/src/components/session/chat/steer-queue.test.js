@@ -35,6 +35,16 @@ function makeApi(initial = { items: [], paused: false }) {
     setPaused: vi.fn(async (value) => {
       paused = !!value;
     }),
+    sendNow: vi.fn(async (position) => {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].position === position) {
+          items.splice(i, 1);
+          return { ok: true };
+        }
+      }
+      throw new Error('not found');
+    }),
+    reschedule: vi.fn(async () => ({ ok: true })),
   };
 }
 
@@ -73,7 +83,7 @@ describe('setupSteerQueue (server-backed)', () => {
     await new Promise((r) => setTimeout(r, 0));
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(api.add).toHaveBeenCalledWith('hello', 'hello');
+    expect(api.add).toHaveBeenCalledWith('hello', 'hello', { files: [], notBefore: '' });
     expect(store.items).toHaveLength(1);
     expect(store.items[0]).toMatchObject({ kind: 'queued', text: 'hello' });
     expect(textarea.value).toBe('');
@@ -117,7 +127,7 @@ describe('setupSteerQueue (server-backed)', () => {
     expect(sendChatMessage).not.toHaveBeenCalled();
   });
 
-  it('sendNow DELETEs the row server-side, then dispatches via sendChatMessage', async () => {
+  it('sendNow pops the row server-side and dispatches it from the server', async () => {
     const { queueButton, textarea } = makeDom();
     const api = makeApi();
     const store = new QueueStore({ api });
@@ -138,11 +148,38 @@ describe('setupSteerQueue (server-backed)', () => {
     expect(store.queuedCount).toBe(1);
 
     const id = store.items[0].id;
+    const position = store.items[0].position;
     await handle.sendNow(id);
 
-    expect(api.remove).toHaveBeenCalledWith(store.items[0]?.position ?? 1);
-    expect(sendChatMessage).toHaveBeenCalledWith('queue-me', []);
+    expect(api.sendNow).toHaveBeenCalledWith(position);
+    expect(sendChatMessage).not.toHaveBeenCalled();
     expect(store.queuedCount).toBe(0);
+  });
+
+  it('queues the composer files and a notBefore for send-later', async () => {
+    const { queueButton, textarea } = makeDom();
+    const api = makeApi();
+    const store = new QueueStore({ api });
+    const file = new File(['x'], 'shot.png', { type: 'image/png' });
+    const attachments = {
+      files: () => [file],
+      composeMessage: (typed) => typed,
+      clear: vi.fn(),
+    };
+    setupSteerQueue({ store, queueButton, textarea, queueApi: api, attachments });
+
+    type(textarea, 'later please');
+    expect(store.actions.hasComposerContent()).toBe(true);
+    expect(store.actions.enqueueLater('2030-01-01T00:00:00Z')).toBe(true);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(api.add).toHaveBeenCalledWith('later please', 'later please', {
+      files: [file],
+      notBefore: '2030-01-01T00:00:00Z',
+    });
+    expect(attachments.clear).toHaveBeenCalled();
+    expect(textarea.value).toBe('');
+    expect(store.actions.enqueueLater('')).toBe(false);
   });
 
   it('edit DELETEs the row server-side and pops the text back into the textarea', async () => {

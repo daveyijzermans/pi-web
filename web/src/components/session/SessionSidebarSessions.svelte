@@ -36,6 +36,8 @@
   } = $props();
 
   let sessions = $state([]);
+  let archivedSessions = $state([]);
+  let archivedOpen = $state(false);
   let totalSessions = $state(0);
   let projectSessionCount = $state(0);
   let currentPage = $state(0);
@@ -77,6 +79,7 @@
   });
   const groupedSessions = $derived(groupSessionsByDate(sessions, now));
   const groupedByProject = $derived(groupSessionsByProject(sessions));
+  const archivedByProject = $derived(groupSessionsByProject(archivedSessions));
   const headerName = $derived(allProjects ? t('session.allProjects') : projectName);
   const pageStart = $derived(totalSessions && sessions.length ? currentPage * pageSize + 1 : 0);
   const pageEnd = $derived(pageStart ? pageStart + sessions.length - 1 : 0);
@@ -112,22 +115,39 @@
     loading = true;
     error = '';
     try {
-      const response = await fetchSessions({
-        ...(allProjects ? {} : { project }),
-        limit: pageSize,
-        offset: pageIndex * pageSize,
-        ...(searchQuery ? { query: searchQuery } : {}),
-      });
+      const scope = allProjects ? {} : { project };
+      // Search spans archived sessions too; the browse list keeps them in a
+      // separate collapsed section so they never interleave with active rows.
+      const [response, archivedResponse] = await Promise.all([
+        fetchSessions({
+          ...scope,
+          limit: pageSize,
+          offset: pageIndex * pageSize,
+          ...(searchQuery ? { query: searchQuery } : { archived: false }),
+        }),
+        searchQuery ? Promise.resolve(null) : fetchSessions({ ...scope, archived: true }),
+      ]);
       if (generation !== sessionLoadGeneration) return;
       sessions = (response.sessions || []).map(normalizeSession);
+      archivedSessions = (archivedResponse?.sessions || []).map(normalizeSession);
       totalSessions = response.total ?? sessions.length;
       if (!searchQuery) projectSessionCount = totalSessions;
       currentPage = pageIndex;
+      // Reveal the archived section when the open session lives there, so the
+      // current row is never hidden behind the collapsed toggle.
+      if (
+        !archivedOpen &&
+        !sessions.some((session) => session.id === currentSessionId) &&
+        archivedSessions.some((session) => session.id === currentSessionId)
+      ) {
+        archivedOpen = true;
+      }
       await tick();
       sessionListEl?.scrollTo?.({ top: 0 });
     } catch (err) {
       if (generation !== sessionLoadGeneration) return;
       sessions = [];
+      archivedSessions = [];
       totalSessions = 0;
       if (!searchQuery) projectSessionCount = 0;
       error = err?.message || t('session.sessionsLoadFailed');
@@ -236,10 +256,17 @@
       }
     };
 
+    // Archive toggles from the command menu move rows between the active and
+    // archived groups; reload the current page so the sidebar reflects it.
+    const onSessionArchived = () => {
+      if (selectedProject || allProjects) loadProjectSessions(selectedProject);
+    };
+
     if (selectedProject) loadProjectSessions(selectedProject, { pageIndex: 0, searchQuery: '' });
     else loading = false;
     document.addEventListener('click', onDocumentClick);
     document.addEventListener('keydown', onDocumentKeydown);
+    window.addEventListener('pi-session-archived', onSessionArchived);
 
     const statusEvents = runningSessionIds
       ? null
@@ -261,6 +288,7 @@
       clearInterval(timer);
       document.removeEventListener('click', onDocumentClick);
       document.removeEventListener('keydown', onDocumentKeydown);
+      window.removeEventListener('pi-session-archived', onSessionArchived);
       statusEvents?.cleanup?.();
     };
   });
@@ -440,7 +468,7 @@
     <div class="sidebar-session-state sidebar-session-state--error">{error}</div>
   {:else if !selectedProject}
     <div class="sidebar-session-state">{t('session.projectUnavailable')}</div>
-  {:else if sessions.length === 0}
+  {:else if sessions.length === 0 && archivedSessions.length === 0}
     <div class="sidebar-session-state">
       {query.trim() ? t('session.noMatchingProjectSessions') : t('session.noProjectSessions')}
     </div>
@@ -470,6 +498,36 @@
         {#each group.sessions as session (session.id)}{@render sessionRow(session)}{/each}
       </section>
     {/each}
+  {/if}
+  {#if !loading && !error && archivedSessions.length > 0}
+    <section class="sidebar-session-group sidebar-session-group--archived">
+      <button
+        type="button"
+        class="sidebar-session-group-heading sidebar-archived-toggle"
+        aria-expanded={String(archivedOpen)}
+        onclick={() => (archivedOpen = !archivedOpen)}
+      >
+        <span class="sidebar-archived-toggle-label">
+          <span class="sidebar-archived-chevron" class:open={archivedOpen}
+            >{@html icon(ChevronRight, { size: 13 })}</span
+          >
+          {t('index.archivedBadge')}
+        </span>
+        <span class="sidebar-session-group-count">{archivedSessions.length}</span>
+      </button>
+      {#if archivedOpen}
+        {#if allProjects}
+          {#each archivedByProject as group (group.project)}
+            <h3 class="sidebar-session-subheading">
+              {group.project.split(/[\\/]/).filter(Boolean).at(-1) || group.project}
+            </h3>
+            {#each group.sessions as session (session.id)}{@render sessionRow(session)}{/each}
+          {/each}
+        {:else}
+          {#each archivedSessions as session (session.id)}{@render sessionRow(session)}{/each}
+        {/if}
+      {/if}
+    </section>
   {/if}
 </div>
 <div class="tree-status sidebar-session-status" id="sidebar-session-status">

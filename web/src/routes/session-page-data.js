@@ -86,6 +86,7 @@ export function buildSessionPageState({
     chatDisabledReason =
       'This session can be viewed, but chat is disabled because its working directory no longer exists.';
   }
+  const archived = data?.archived ?? data?.Archived ?? false;
   const model = data?.model || data?.Model || '';
   const provider = data?.modelProvider || data?.ModelProvider || '';
   return {
@@ -97,6 +98,7 @@ export function buildSessionPageState({
     scratchpad,
     chatAvailable,
     chatDisabledReason,
+    archived,
     modelLabel: model && provider ? `${model} @ ${provider}` : model,
     payloadBase64: encodePayload(
       {

@@ -1,11 +1,16 @@
 package server
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"pi-web/internal/chat"
 	"pi-web/internal/chatqueue"
 	"pi-web/internal/sessions"
 	"pi-web/internal/workers"
@@ -178,5 +183,76 @@ func TestDrainerKickIsNonBlocking(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatalf("kick should never block")
+	}
+}
+
+func TestDrainerHoldsScheduledItemUntilDue(t *testing.T) {
+	fake := &fakeSender{sendCh: make(chan struct{}, 1)}
+	s, d, id := newDrainerServer(t, fake)
+	later := time.Now().Add(time.Hour)
+	if _, err := s.chatQueue.AddItem(id, chatqueue.NewItem{Message: "later", NotBefore: &later}); err != nil {
+		t.Fatal(err)
+	}
+
+	d.drainSession(id)
+	select {
+	case <-fake.sendCh:
+		t.Fatalf("scheduled item dispatched before its time")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	s.chatQueue.Now = func() time.Time { return later.Add(time.Second) }
+	d.drainSession(id)
+	select {
+	case <-fake.sendCh:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("due item should dispatch")
+	}
+}
+
+func TestDrainerSendsStoredImages(t *testing.T) {
+	fake := &fakeSender{sendCh: make(chan struct{}, 1)}
+	s, d, id := newDrainerServer(t, fake)
+	if _, err := s.chatQueue.AddItem(id, chatqueue.NewItem{
+		Message: "see image",
+		Images:  []chat.Image{{Type: "image", Data: "AAAA", MimeType: "image/png"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	d.drainSession(id)
+	select {
+	case <-fake.sendCh:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected Send")
+	}
+	_, _, req := fake.sentInfo()
+	if len(req.Images) != 1 || req.Images[0].Data != "AAAA" {
+		t.Fatalf("images not forwarded: %#v", req.Images)
+	}
+}
+
+func TestChatQueueSendNowPopsAndDispatches(t *testing.T) {
+	fake := &fakeSender{sendCh: make(chan struct{}, 1), status: workers.WorkerStatus{State: workers.WorkerStateRunning}}
+	s, _, id := newDrainerServer(t, fake)
+	later := time.Now().Add(time.Hour)
+	item, err := s.chatQueue.AddItem(id, chatqueue.NewItem{Message: "now please", NotBefore: &later})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/chat/queue/send?id="+id,
+		strings.NewReader(`{"position":`+strconv.FormatInt(item.Position, 10)+`}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.handleChatQueueSend(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
+	}
+	select {
+	case <-fake.sendCh:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected immediate Send even while running")
+	}
+	if snap, _ := s.chatQueue.List(id); len(snap.Items) != 0 {
+		t.Fatalf("item should be popped: %#v", snap.Items)
 	}
 }

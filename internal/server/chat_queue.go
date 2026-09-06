@@ -1,10 +1,16 @@
 package server
 
 import (
+	"errors"
+	"fmt"
+	"mime"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
+	"time"
 
+	"pi-web/internal/chat"
 	"pi-web/internal/chatqueue"
 	"pi-web/internal/sessions"
 )
@@ -14,7 +20,18 @@ import (
 //   GET    /api/chat/queue?id=<sessionID>             — list items + paused
 //   POST   /api/chat/queue?id=<sessionID>             — append an item
 //   DELETE /api/chat/queue?id=<sessionID>&position=N  — remove an item
-//   PATCH  /api/chat/queue?id=<sessionID>             — set paused flag
+//   PATCH  /api/chat/queue?id=<sessionID>             — set paused flag, or
+//                                                       reschedule one item
+//   POST   /api/chat/queue/send?id=<sessionID>        — {position}: pop the
+//                                                       item and send it now
+//                                                       (steers if running)
+//
+// POST accepts either JSON {message, displayText, notBefore} or the same
+// multipart form /api/chat takes (message + images files + displayText +
+// notBefore). Uploads are saved to disk immediately — exactly as an immediate
+// send would — so the queued row carries the attachment lines and inline
+// images and survives the browser going away. notBefore (RFC 3339) holds the
+// item until that time; the drainer dispatches it on its next tick after.
 //
 // On any state change, we broadcast a "queue" SSE event on the session topic
 // so any other open tab refreshes its local view, and kick the drainer so it
@@ -70,29 +87,90 @@ func (s *Server) handleChatQueuePost(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var body struct {
-		Message     string `json:"message"`
-		DisplayText string `json:"displayText"`
-	}
-	if !decodeJSONBody(w, r, &body) {
+	in, ok := s.parseQueuePost(w, r, sessionID)
+	if !ok {
 		return
 	}
-	message := strings.TrimSpace(body.Message)
-	if message == "" {
-		writeJSONError(w, http.StatusBadRequest, "message is required")
-		return
-	}
-	displayText := body.DisplayText
-	if strings.TrimSpace(displayText) == "" {
-		displayText = message
-	}
-	item, err := s.chatQueue.Add(sessionID, message, displayText)
+	item, err := s.chatQueue.AddItem(sessionID, in)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "add queue item: "+err.Error())
 		return
 	}
 	s.notifyQueueChanged(sessionID)
 	writeJSON(w, http.StatusCreated, item)
+}
+
+// parseQueuePost reads a JSON or multipart queue POST into a NewItem. Writes
+// the error response itself and returns ok=false on failure.
+func (s *Server) parseQueuePost(w http.ResponseWriter, r *http.Request, sessionID string) (chatqueue.NewItem, bool) {
+	mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	var in chatqueue.NewItem
+	var notBeforeRaw string
+	if mediaType == "multipart/form-data" {
+		chatReq, err := chat.ParseRequest(r, chat.DefaultMaxImageBytes, chat.DefaultMaxRequestBytes)
+		if err != nil {
+			switch {
+			case errors.Is(err, chat.ErrEmptyRequest):
+				writeJSONError(w, http.StatusBadRequest, "message is required")
+			case errors.Is(err, chat.ErrImageTooLarge), errors.As(err, new(*http.MaxBytesError)):
+				writeJSONError(w, http.StatusRequestEntityTooLarge, err.Error())
+			default:
+				writeJSONError(w, http.StatusBadRequest, err.Error())
+			}
+			return in, false
+		}
+		names, err := s.saveChatUploads(sessionID, &chatReq)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "save uploads failed for %s: %v\n", sessionID, err)
+			writeJSONError(w, http.StatusInternalServerError, "failed to save uploaded file")
+			return in, false
+		}
+		in.Message = chatReq.Message
+		in.Images = chatReq.Images
+		in.Attachments = names
+		in.DisplayText = r.FormValue("displayText")
+		notBeforeRaw = r.FormValue("notBefore")
+	} else {
+		var body struct {
+			Message     string `json:"message"`
+			DisplayText string `json:"displayText"`
+			NotBefore   string `json:"notBefore"`
+		}
+		if !decodeJSONBody(w, r, &body) {
+			return in, false
+		}
+		in.Message = strings.TrimSpace(body.Message)
+		in.DisplayText = body.DisplayText
+		notBeforeRaw = body.NotBefore
+		if in.Message == "" {
+			writeJSONError(w, http.StatusBadRequest, "message is required")
+			return in, false
+		}
+	}
+	if strings.TrimSpace(in.DisplayText) == "" {
+		in.DisplayText = in.Message
+	}
+	notBefore, err := parseNotBefore(notBeforeRaw)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return in, false
+	}
+	in.NotBefore = notBefore
+	return in, true
+}
+
+// parseNotBefore accepts "" (no schedule) or an RFC 3339 timestamp.
+func parseNotBefore(raw string) (*time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return nil, errors.New("notBefore must be an RFC 3339 timestamp")
+	}
+	t = t.UTC()
+	return &t, nil
 }
 
 func (s *Server) handleChatQueueDelete(w http.ResponseWriter, r *http.Request) {
@@ -124,13 +202,35 @@ func (s *Server) handleChatQueuePatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Paused *bool `json:"paused"`
+		Paused    *bool   `json:"paused"`
+		Position  *int64  `json:"position"`
+		NotBefore *string `json:"notBefore"`
 	}
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
+	// Reschedule form: {position, notBefore} — notBefore "" or null clears the
+	// schedule so the item becomes due immediately.
+	if body.Position != nil {
+		var raw string
+		if body.NotBefore != nil {
+			raw = *body.NotBefore
+		}
+		notBefore, err := parseNotBefore(raw)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := s.chatQueue.SetNotBefore(sessionID, *body.Position, notBefore); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "reschedule: "+err.Error())
+			return
+		}
+		s.notifyQueueChanged(sessionID)
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "position": *body.Position, "notBefore": notBefore})
+		return
+	}
 	if body.Paused == nil {
-		writeJSONError(w, http.StatusBadRequest, "paused is required")
+		writeJSONError(w, http.StatusBadRequest, "paused or position is required")
 		return
 	}
 	if err := s.chatQueue.SetPaused(sessionID, *body.Paused); err != nil {
@@ -139,6 +239,47 @@ func (s *Server) handleChatQueuePatch(w http.ResponseWriter, r *http.Request) {
 	}
 	s.notifyQueueChanged(sessionID)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "paused": *body.Paused})
+}
+
+func (s *Server) handleChatQueueSend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.chatQueue == nil || s.queueDrainer == nil || s.chatSender == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "chat queue unavailable")
+		return
+	}
+	resolved, err := sessions.ResolveByID(s.sessionsDir, r.URL.Query().Get("id"))
+	if resolveOrWriteError(w, err) {
+		return
+	}
+	if !resolved.Session.ChatAvailable {
+		writeJSONError(w, http.StatusConflict, resolved.Session.ChatDisabledReason)
+		return
+	}
+	var body struct {
+		Position *int64 `json:"position"`
+	}
+	if !decodeJSONBody(w, r, &body) || body.Position == nil {
+		if body.Position == nil {
+			writeJSONError(w, http.StatusBadRequest, "position is required")
+		}
+		return
+	}
+	sessionID := resolved.Session.ID
+	item, ok, err := s.chatQueue.Take(sessionID, *body.Position)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "take queue item: "+err.Error())
+		return
+	}
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "queue item not found")
+		return
+	}
+	s.queueDrainer.dispatch(sessionID, resolved.Path, item)
+	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true, "status": "queued"})
 }
 
 // notifyQueueChanged informs other tabs (via SSE) and the drainer that this

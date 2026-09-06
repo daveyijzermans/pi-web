@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"pi-web/internal/chat"
+	"pi-web/internal/chatqueue"
 	"pi-web/internal/sessions"
 	"pi-web/internal/workers"
 )
@@ -159,12 +160,19 @@ func (d *queueDrainer) drainSession(sessionID string) {
 	if !ok {
 		return
 	}
-	req := chat.Request{Message: item.Message}
+	d.dispatch(sessionID, resolved.Path, item)
+}
+
+// dispatch hands one popped item to the chat sender on a background task and
+// tells listeners the queue changed. Shared with the "send now" handler, which
+// bypasses the idle/due checks on purpose (the worker steers if running).
+func (d *queueDrainer) dispatch(sessionID, sessionPath string, item chatqueue.Item) {
+	req := chat.Request{Message: item.Message, Images: item.Images}
 	d.server.markWebTurnActive(sessionID)
 	d.server.startTask(func(taskCtx context.Context) {
 		ctx, cancel := context.WithTimeout(taskCtx, d.dispatchTimeout)
 		defer cancel()
-		if err := d.server.chatSender.Send(ctx, sessionID, resolved.Path, req); err != nil && !errors.Is(err, context.Canceled) {
+		if err := d.server.chatSender.Send(ctx, sessionID, sessionPath, req); err != nil && !errors.Is(err, context.Canceled) {
 			fmt.Fprintf(os.Stderr,
 				"queue drainer: Send %s position %d failed: %v\n",
 				sessionID, item.Position, err)

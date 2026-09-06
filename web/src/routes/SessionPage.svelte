@@ -3,6 +3,7 @@
   import SessionShell from '../components/session/SessionShell.svelte';
   import { applyLazyHighlighting } from '../session/lazy-highlight.js';
   import { loadSessionPageState } from './session-page-data.js';
+  import { setSessionArchived } from '../session/session-archived.svelte.js';
   import { SessionDataModel } from '../session/data/session-data.svelte.js';
   import {
     hydrateSessionModel,
@@ -79,6 +80,7 @@
         chatAvailable = state.chatAvailable;
         chatDisabledReason = state.chatDisabledReason;
         modelLabel = state.modelLabel;
+        setSessionArchived(state.archived);
         hydrateSessionModel({
           sessionModel,
           payloadBase64,

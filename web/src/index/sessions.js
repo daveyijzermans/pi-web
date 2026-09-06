@@ -96,8 +96,9 @@ export function filterSessions(sessions = [], query = '') {
   return sessions.filter((session) => sessionSearchText(session).toLowerCase().includes(q));
 }
 
-export function defaultFetchSessions({ limit, offset, query, project } = {}) {
+export function defaultFetchSessions({ limit, offset, query, project, archived } = {}) {
   const params = new URLSearchParams();
+  if (archived === true || archived === false) params.set('archived', archived ? '1' : '0');
   if (Number.isFinite(limit) && limit > 0) params.set('limit', String(limit));
   if (Number.isFinite(offset) && offset > 0) params.set('offset', String(offset));
   if (query) params.set('q', query);

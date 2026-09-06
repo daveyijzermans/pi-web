@@ -549,6 +549,11 @@ a { color: inherit; }
     background: var(--surface-2);
     color: var(--text);
 }
+@media (hover: none) {
+    .session-archive-btn {
+        opacity: 1;
+    }
+}
 .session-card-wrap .session-title-row {
     padding-right: 26px;
 }

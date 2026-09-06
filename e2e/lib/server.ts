@@ -83,6 +83,9 @@ export async function startServer(): Promise<StartedServer> {
       PATH: `${STUB_PI_DIR}${delimiter}${process.env.PATH ?? ""}`,
       // Ensure auth is off for tests regardless of the dev's shell env.
       PI_WEB_TOKEN: "",
+      // Dev mode disables background jobs (queue drainer, scheduler); the
+      // steer/queue specs need them, so never inherit it from the shell.
+      PI_WEB_DEV: "",
       // Lower the large-session truncation thresholds so the load-earlier spec
       // can exercise pagination with a ~150-entry session instead of rendering
       // thousands of messages (which flaked under parallel CPU contention).

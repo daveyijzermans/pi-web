@@ -205,11 +205,36 @@ These update `lastStreamActivity` so `Status()` continues to report `running` un
 
 After 10 minutes of idle time (no user-initiated actions), the reaper goroutine closes idle workers to free resources.
 
-### 9. Cancelling a Chat
+### 9. Queue, send later, and steer
+
+Follow-ups typed while a run is active can be **steered** (sent immediately via
+`/api/chat`; pi folds them into the active turn with `streamingBehavior:"steer"`)
+or **queued**. Queued items live server-side in `chat_queue_items`
+(`internal/chatqueue`) and are dispatched by the autonomous drainer
+(`internal/server/chat_queue_drainer.go`) when the worker is idle — the browser
+can be closed.
+
+- `POST /api/chat/queue` accepts JSON `{message, displayText, notBefore}` or the
+  same multipart form as `/api/chat`. Uploads are saved under
+  `chat-uploads/<session>` at enqueue time (attachment lines are appended to the
+  stored message) and inline images are stored as JSON on the row, so a queued
+  item carries the full composed turn.
+- `notBefore` (RFC 3339) is the **send later** path: the drainer ignores items
+  until they are due (`PopHead` / `SessionsWithItems` filter on `not_before`),
+  so later immediate items are not blocked. Timed items fire on the drainer's
+  next tick (≤ 5 s) after their time, and only while pi-web is running.
+- `PATCH /api/chat/queue` with `{position, notBefore}` reschedules (empty
+  clears); `POST /api/chat/queue/send` pops an item and dispatches it right
+  away (steering if a run is active). The panel's Enter shortcut uses the latter.
+- The composer's "Send later" picker offers relative presets and, when
+  `/api/plan-usage` reports a provider rate-limit window, "when window resets"
+  (one minute past the soonest reset).
+
+### 10. Cancelling a Chat
 
 `POST /api/chat/cancel?id=<id>` aborts the running worker, removes the terminal's session-status file, broadcasts a `reload` event, and returns `{"ok": true, "status": "cancelled"}`.
 
-### 10. Model Switch Side Effect
+### 11. Model Switch Side Effect
 
 `handleSetModel` updates the worker model via RPC. On success, the worker automatically refreshes its thinking level (`refreshThinkingLevel`) so the UI stays consistent.
 

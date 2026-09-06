@@ -3,8 +3,15 @@
   import { t } from '../../../shared/i18n.js';
   import { ChatToolbarState } from './chat-toolbar-state.svelte.js';
   import ContextUsage from './ContextUsage.svelte';
+  import PlanUsage from './PlanUsage.svelte';
+  import SendLater from './SendLater.svelte';
 
-  let { chatAvailable = true, toolbar = new ChatToolbarState(), modelLabel = '' } = $props();
+  let {
+    chatAvailable = true,
+    toolbar = new ChatToolbarState(),
+    modelLabel = '',
+    queueStore = null,
+  } = $props();
 
   const statusText = $derived(
     toolbar.statusText || (chatAvailable ? t('composer.idle') : t('composer.unavailable')),
@@ -44,8 +51,10 @@
       >{toolbar.modelLabel || modelLabel || t('composer.modelPlaceholder')}</button
     >
     <ContextUsage />
+    <PlanUsage />
   </div>
   <div class="actions">
+    {#if queueStore}<SendLater store={queueStore} {chatAvailable} />{/if}
     <button
       type="button"
       id="pi-chat-cancel"
