@@ -75,11 +75,13 @@ func ParseRequest(r *http.Request, maxImageBytes, maxRequestBytes int64) (Reques
 
 		// Only whitelisted image types are sent inline to the model
 		if inlineImageMimes[mimeType] {
-			// Inline images are capped at maxImageBytes
-			if int64(len(data)) > maxImageBytes {
+			// Shrink oversized images first (see ResizeImage), then cap the
+			// inline payload at maxImageBytes.
+			inline, inlineMime := ResizeImage(data, mimeType)
+			if int64(len(inline)) > maxImageBytes {
 				return Request{}, ErrImageTooLarge
 			}
-			chat.Images = append(chat.Images, Image{Type: "image", Data: base64.StdEncoding.EncodeToString(data), MimeType: mimeType})
+			chat.Images = append(chat.Images, Image{Type: "image", Data: base64.StdEncoding.EncodeToString(inline), MimeType: inlineMime})
 		}
 	}
 

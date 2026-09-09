@@ -131,6 +131,10 @@ Content-Type: image/png
    - Validate size
    - Detect MIME type (`http.DetectContentType`)
    - Reject non-image types
+   - Downscale to ≤2000px on the longest edge (`chat.ResizeImage`; JPEG stays
+     JPEG, PNG/GIF/WebP re-encode as PNG) — pi only auto-resizes `@file`/tool
+     images, and Anthropic rejects many-image requests with any image over
+     2000px, which would also break every later turn and compaction
    - Base64 encode
 5. Validate at least one of message or images is present
 
