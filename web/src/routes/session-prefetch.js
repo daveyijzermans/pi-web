@@ -2,15 +2,22 @@
 // to start the request before the route actually mounts. loadSessionPageState
 // consumes the in-flight promise instead of issuing a fresh fetch when present.
 //
-// Bounded so a long-running SPA session can't accumulate stale entries; only
-// holds Promises, never the resolved payload, so a hit fed straight from the
-// network is still fresh by the time the route mounts.
+// A hover that is never followed by a click leaves a resolved promise behind,
+// and a resolved promise is a frozen payload. Entries therefore carry the time
+// the request started and expire after TTL_MS, so only a hover that leads
+// straight into navigation is reused; anything older falls back to the network
+// and the route sees the session's current turns.
 
 const inflight = new Map();
 const MAX_ENTRIES = 16;
+const TTL_MS = 10_000;
 
-export function prefetchSession(id, { fetchImpl = fetch } = {}) {
-  if (!id || inflight.has(id)) return;
+export function prefetchSession(id, { fetchImpl = fetch, now = Date.now } = {}) {
+  if (!id) return;
+  if (inflight.has(id)) {
+    if (now() - inflight.get(id).at <= TTL_MS) return;
+    inflight.delete(id);
+  }
   if (inflight.size >= MAX_ENTRIES) {
     const oldest = inflight.keys().next().value;
     if (oldest) inflight.delete(oldest);
@@ -32,15 +39,16 @@ export function prefetchSession(id, { fetchImpl = fetch } = {}) {
   // Swallow uncaught-rejection warnings: consumeSessionPrefetch handlers add a
   // proper catcher when they read this back.
   promise.catch(() => {});
-  inflight.set(id, promise);
+  inflight.set(id, { promise, at: now() });
 }
 
-export function consumeSessionPrefetch(id) {
+export function consumeSessionPrefetch(id, { now = Date.now } = {}) {
   if (!id) return null;
-  const promise = inflight.get(id);
-  if (!promise) return null;
+  const entry = inflight.get(id);
+  if (!entry) return null;
   inflight.delete(id);
-  return promise;
+  if (now() - entry.at > TTL_MS) return null;
+  return entry.promise;
 }
 
 export function resetSessionPrefetch() {

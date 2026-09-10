@@ -45,6 +45,29 @@ describe('session-prefetch', () => {
     expect(calls).toBe(1);
   });
 
+  it('ignores a hover older than the TTL so the route refetches', async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls++;
+      return { ok: true, json: async () => ({ name: 'Stale' }) };
+    };
+    prefetchSession('s.jsonl', { fetchImpl, now: () => 0 });
+    await Promise.resolve();
+    expect(consumeSessionPrefetch('s.jsonl', { now: () => 10_001 })).toBe(null);
+    expect(calls).toBe(1);
+  });
+
+  it('restarts the request when a stale entry is hovered again', () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls++;
+      return { ok: true, json: async () => ({}) };
+    };
+    prefetchSession('s.jsonl', { fetchImpl, now: () => 0 });
+    prefetchSession('s.jsonl', { fetchImpl, now: () => 10_001 });
+    expect(calls).toBe(2);
+  });
+
   it('returns null when there is no prefetch for the id', () => {
     expect(consumeSessionPrefetch('nope')).toBe(null);
   });
